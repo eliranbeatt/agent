@@ -56,7 +56,7 @@ class GraphBuilder:
         self.agent_generator = AgentGenerator(config)
         self.agent_executor = AgentExecutor(config)
         self.context_manager = ContextManager(config)
-        self.memory_manager = MemoryManager(config)
+        self.memory_manager = MemoryManager.from_config(config)
         self.evaluator = Evaluator(config)
         self.workflow_executor = WorkflowExecutor(config)
         

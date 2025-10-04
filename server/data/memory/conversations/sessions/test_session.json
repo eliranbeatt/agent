@@ -1,0 +1,22 @@
+{
+  "session_id": "test_session",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello",
+      "timestamp": "2025-10-04T18:39:58.135643",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Hi there!",
+      "timestamp": "2025-10-04T18:39:58.135990",
+      "metadata": {
+        "test": true
+      }
+    }
+  ],
+  "updated_at": "2025-10-04T18:39:58.135999"
+}

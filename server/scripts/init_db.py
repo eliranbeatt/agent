@@ -62,7 +62,7 @@ def initialize_memory(config):
     """Initialize memory system."""
     try:
         logger.info("Initializing memory system...")
-        memory_manager = MemoryManager(config)
+        memory_manager = MemoryManager.from_config(config)
         
         # Test memory operations
         test_session = "init_test_session"

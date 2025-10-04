@@ -271,7 +271,7 @@ class TestRequirement5_MemoryManagement:
         """
         from app.core.memory.memory_manager import MemoryManager
         
-        memory_manager = MemoryManager(executor.config)
+        memory_manager = MemoryManager.from_config(executor.config)
         
         # Store conversation
         try:

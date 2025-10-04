@@ -11,9 +11,22 @@ from app.config.loader import ConfigLoader
 router = APIRouter(prefix="/memory", tags=["memory"])
 
 # Initialize memory manager
+import os
 config_loader = ConfigLoader()
 config = config_loader.load_config()
-memory_manager = MemoryManager(config.memory)
+
+# Get OpenAI API key from environment
+api_key = os.getenv("OPENAI_API_KEY", config.openai_api_key or "")
+
+# Initialize MemoryManager with proper parameters
+memory_manager = MemoryManager(
+    api_key=api_key,
+    storage_path=config.memory.memory_db_path,
+    ttl_days=config.memory.conversation_ttl_days,
+    max_facts=1000,  # Could be added to config
+    max_conversations=100,  # Could be added to config
+    max_rag_traces=500,  # Could be added to config
+)
 
 
 @router.get("/", response_model=MemoryListResponse)

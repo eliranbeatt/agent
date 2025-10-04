@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from pathlib import Path
@@ -24,6 +25,32 @@ logger = logging.getLogger(__name__)
 
 class MemoryManager:
     """Manages persistent memory using Mem0."""
+
+    @classmethod
+    def from_config(cls, config):
+        """
+        Create MemoryManager from SystemConfig.
+        
+        Args:
+            config: SystemConfig object
+            
+        Returns:
+            MemoryManager instance
+        """
+        # Get OpenAI API key from environment or config
+        api_key = os.getenv("OPENAI_API_KEY", getattr(config, "openai_api_key", None) or "")
+        
+        if not api_key:
+            logger.warning("No OpenAI API key found. Memory features may be limited.")
+        
+        return cls(
+            api_key=api_key,
+            storage_path=config.memory.memory_db_path,
+            ttl_days=config.memory.conversation_ttl_days,
+            max_facts=1000,  # Could be added to MemoryConfig
+            max_conversations=100,  # Could be added to MemoryConfig
+            max_rag_traces=500,  # Could be added to MemoryConfig
+        )
 
     def __init__(
         self,
@@ -48,31 +75,40 @@ class MemoryManager:
         self.storage_path = Path(storage_path or "./data/memory")
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
-        # Initialize Mem0 with OpenAI integration
-        config = {
-            "llm": {
-                "provider": "openai",
-                "config": {
-                    "model": "gpt-4o-mini",
-                    "api_key": api_key,
+        # Initialize Mem0 with OpenAI integration (only if API key is provided)
+        self.memory = None
+        if api_key and api_key != "":
+            try:
+                config = {
+                    "llm": {
+                        "provider": "openai",
+                        "config": {
+                            "model": "gpt-4o-mini",
+                            "api_key": api_key,
+                        }
+                    },
+                    "embedder": {
+                        "provider": "openai",
+                        "config": {
+                            "model": "text-embedding-3-small",
+                            "api_key": api_key,
+                        }
+                    },
+                    "vector_store": {
+                        "provider": "chroma",
+                        "config": {
+                            "path": str(self.storage_path / "chroma"),
+                        }
+                    },
                 }
-            },
-            "embedder": {
-                "provider": "openai",
-                "config": {
-                    "model": "text-embedding-3-small",
-                    "api_key": api_key,
-                }
-            },
-            "vector_store": {
-                "provider": "chroma",
-                "config": {
-                    "path": str(self.storage_path / "chroma"),
-                }
-            },
-        }
 
-        self.memory = Memory.from_config(config)
+                self.memory = Memory.from_config(config)
+                logger.info("Mem0 initialized successfully with OpenAI integration")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Mem0: {e}. Memory features will use local storage only.")
+                self.memory = None
+        else:
+            logger.warning("No OpenAI API key provided. Mem0 semantic search disabled, using local storage only.")
         self.ttl_days = ttl_days
         self.max_facts = max_facts
         self.max_conversations = max_conversations
@@ -128,12 +164,13 @@ class MemoryManager:
             with open(profile_path, "w") as f:
                 json.dump(profile.to_dict(), f, indent=2)
 
-            # Also store in Mem0 for semantic retrieval
-            self.memory.add(
-                messages=f"User profile: {json.dumps(profile.to_dict())}",
-                user_id=profile.user_id,
-                metadata={"type": MemoryType.PROFILE.value}
-            )
+            # Also store in Mem0 for semantic retrieval (if available)
+            if self.memory:
+                self.memory.add(
+                    messages=f"User profile: {json.dumps(profile.to_dict())}",
+                    user_id=profile.user_id,
+                    metadata={"type": MemoryType.PROFILE.value}
+                )
 
             logger.info(f"Stored profile for user {profile.user_id}")
         except Exception as e:
@@ -193,19 +230,20 @@ class MemoryManager:
                 metadata=metadata or {},
             )
 
-            # Store in Mem0
-            mem_metadata = {
-                "type": MemoryType.FACT.value,
-                "source": source,
-                "confidence": confidence,
-                **(metadata or {}),
-            }
+            # Store in Mem0 (if available)
+            if self.memory:
+                mem_metadata = {
+                    "type": MemoryType.FACT.value,
+                    "source": source,
+                    "confidence": confidence,
+                    **(metadata or {}),
+                }
 
-            self.memory.add(
-                messages=content,
-                user_id=user_id or "system",
-                metadata=mem_metadata
-            )
+                self.memory.add(
+                    messages=content,
+                    user_id=user_id or "system",
+                    metadata=mem_metadata
+                )
 
             # Store locally
             fact_file = self.facts_path / f"{user_id or 'system'}_{fact.timestamp.timestamp()}.json"
@@ -255,19 +293,20 @@ class MemoryManager:
                 metadata=metadata or {},
             )
 
-            # Store in Mem0
-            mem_metadata = {
-                "type": MemoryType.CONVERSATION.value,
-                "session_id": session_id,
-                "topics": ",".join(key_topics),
-                **(metadata or {}),
-            }
+            # Store in Mem0 (if available)
+            if self.memory:
+                mem_metadata = {
+                    "type": MemoryType.CONVERSATION.value,
+                    "session_id": session_id,
+                    "topics": ",".join(key_topics),
+                    **(metadata or {}),
+                }
 
-            self.memory.add(
-                messages=f"Conversation summary: {summary}. Topics: {', '.join(key_topics)}",
-                user_id=user_id or "system",
-                metadata=mem_metadata
-            )
+                self.memory.add(
+                    messages=f"Conversation summary: {summary}. Topics: {', '.join(key_topics)}",
+                    user_id=user_id or "system",
+                    metadata=mem_metadata
+                )
 
             # Store locally
             conv_file = self.conversations_path / f"{session_id}.json"
@@ -320,19 +359,20 @@ class MemoryManager:
                 metadata=metadata or {},
             )
 
-            # Store in Mem0
-            mem_metadata = {
-                "type": MemoryType.RAG_TRACE.value,
-                "session_id": session_id or "",
-                "num_chunks": len(chunk_ids),
-                **(metadata or {}),
-            }
+            # Store in Mem0 (if available)
+            if self.memory:
+                mem_metadata = {
+                    "type": MemoryType.RAG_TRACE.value,
+                    "session_id": session_id or "",
+                    "num_chunks": len(chunk_ids),
+                    **(metadata or {}),
+                }
 
-            self.memory.add(
-                messages=f"RAG query: {query}. Retrieved {len(chunk_ids)} chunks.",
-                user_id=user_id or "system",
-                metadata=mem_metadata
-            )
+                self.memory.add(
+                    messages=f"RAG query: {query}. Retrieved {len(chunk_ids)} chunks.",
+                    user_id=user_id or "system",
+                    metadata=mem_metadata
+                )
 
             # Store locally
             trace_file = self.rag_traces_path / f"{session_id or 'system'}_{rag_trace.timestamp.timestamp()}.json"
@@ -370,12 +410,14 @@ class MemoryManager:
             # Get profile
             profile = self.get_profile(user_id) if user_id else None
 
-            # Search Mem0 for relevant memories
-            memories = self.memory.search(
-                query=context,
-                user_id=user_id or "system",
-                limit=limit
-            )
+            # Search Mem0 for relevant memories (if available)
+            memories = []
+            if self.memory:
+                memories = self.memory.search(
+                    query=context,
+                    user_id=user_id or "system",
+                    limit=limit
+                )
 
             # Separate by type
             relevant_facts = []
@@ -665,12 +707,14 @@ class MemoryManager:
             List of matching facts
         """
         try:
-            # Search in Mem0
-            memories = self.memory.search(
-                query=query,
-                user_id=user_id or "system",
-                limit=limit * 2,  # Get more to filter by confidence
-            )
+            # Search in Mem0 (if available)
+            memories = []
+            if self.memory:
+                memories = self.memory.search(
+                    query=query,
+                    user_id=user_id or "system",
+                    limit=limit * 2,  # Get more to filter by confidence
+                )
 
             facts = []
             for mem in memories:
