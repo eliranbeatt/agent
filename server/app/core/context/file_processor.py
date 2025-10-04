@@ -64,14 +64,22 @@ from ...config.models import SystemConfig, ContextConfig
 class FileProcessor:
     """Handles file ingestion and content extraction for various document types."""
     
-    def __init__(self, config: Optional[ContextConfig] = None):
+    def __init__(self, config: Optional[Union[SystemConfig, ContextConfig]] = None):
         """
         Initialize the file processor.
         
         Args:
-            config: Context configuration with file processing settings
+            config: System or Context configuration with file processing settings
         """
-        self.config = config or ContextConfig()
+        # Handle both SystemConfig and ContextConfig
+        if config is None:
+            context_config = ContextConfig()
+        elif isinstance(config, SystemConfig):
+            context_config = config.context
+        else:
+            context_config = config
+            
+        self.config = context_config
         
         # Extract configuration values
         self.max_file_size_mb = self.config.max_file_size_mb
@@ -94,7 +102,9 @@ class FileProcessor:
                 self.supported_extensions[ext_lower] = FileType.TEXT
             elif ext_lower == '.md':
                 self.supported_extensions[ext_lower] = FileType.TEXT
-            elif ext_lower in ['.png', '.jpg', '.jpeg', '.tiff', '.bmp']:
+            elif ext_lower == '.png':
+                self.supported_extensions[ext_lower] = FileType.PNG
+            elif ext_lower in ['.jpg', '.jpeg', '.tiff', '.bmp']:
                 self.supported_extensions[ext_lower] = FileType.IMAGE
         
         # Configure Tesseract if available

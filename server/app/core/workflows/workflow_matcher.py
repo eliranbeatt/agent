@@ -113,17 +113,17 @@ class WorkflowMatcher:
         """
         confidence = 0.0
         
-        # 1. Exact trigger matching (50% weight - increased from 40%)
+        # 1. Exact trigger matching (65% weight - increased to prioritize trigger matches)
         trigger_score = self._calculate_trigger_score(request, workflow.triggers)
-        confidence += trigger_score * 0.5
+        confidence += trigger_score * 0.65
         
-        # 2. Pattern matching (25% weight - reduced from 30%)
+        # 2. Pattern matching (15% weight)
         pattern_score = self._calculate_pattern_score(request_words, workflow.name)
-        confidence += pattern_score * 0.25
+        confidence += pattern_score * 0.15
         
-        # 3. Semantic similarity (15% weight - reduced from 20%)
+        # 3. Semantic similarity (10% weight)
         semantic_score = self._calculate_semantic_score(request, workflow)
-        confidence += semantic_score * 0.15
+        confidence += semantic_score * 0.1
         
         # 4. Context relevance (10% weight)
         context_score = self._calculate_context_score(request, workflow, context)
@@ -184,6 +184,10 @@ class WorkflowMatcher:
         
         # Use the better of: average score or best single match
         # This helps when one trigger matches very well
+        # If we have at least one exact match, return 1.0
+        if matches > 0:
+            return 1.0
+        
         return min(max(avg_score, max_single_score * 0.85), 1.0)
     
     def _calculate_pattern_score(self, request_words: set, workflow_name: str) -> float:
@@ -273,14 +277,15 @@ class WorkflowMatcher:
             if has_file_context or has_uploaded_files:
                 score = 0.9
             else:
-                score = 0.3
+                # More neutral when no explicit file context
+                score = 0.7
                 
         # Summarize workflows also benefit from file context
         elif "summarize" in workflow.name.lower() or "extract" in workflow.name.lower():
             if has_file_context or has_uploaded_files:
                 score = 0.8
             else:
-                score = 0.4
+                score = 0.6
                 
         # OCR workflows require image context
         elif "ocr" in workflow.name.lower() or "image" in workflow.name.lower():
@@ -298,7 +303,7 @@ class WorkflowMatcher:
             if has_multi_doc:
                 score = 0.85
             else:
-                score = 0.4
+                score = 0.5
                 
         return score
     

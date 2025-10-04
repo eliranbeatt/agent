@@ -128,7 +128,39 @@
       "metadata": {
         "test": true
       }
+    },
+    {
+      "role": "user",
+      "content": "Test message",
+      "timestamp": "2025-10-04T15:02:02.537670",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Test response",
+      "timestamp": "2025-10-04T15:02:02.538289",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "user",
+      "content": "Test message",
+      "timestamp": "2025-10-04T15:04:36.788584",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Test response",
+      "timestamp": "2025-10-04T15:04:36.798326",
+      "metadata": {
+        "test": true
+      }
     }
   ],
-  "updated_at": "2025-10-04T09:38:38.445746"
+  "updated_at": "2025-10-04T15:04:36.798344"
 }

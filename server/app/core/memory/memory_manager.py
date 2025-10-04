@@ -600,6 +600,11 @@ class MemoryManager:
         """
         return self.conversation_manager.get_full_history(session_id)
 
+    def get_conversation_window(
+        self,
+        session_id: str,
+        window_size: Optional[int] = None,
+    ) -> List[Message]:
         """
         Get rolling window of recent conversation messages.
 
