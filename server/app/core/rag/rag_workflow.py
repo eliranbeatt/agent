@@ -184,6 +184,17 @@ class RAGWorkflow:
                     final_confidence = (generated_answer.confidence + verification.confidence) / 2
                 else:
                     final_confidence = min(generated_answer.confidence, verification.confidence)
+                    
+                    # Log verification failure for potential replanning
+                    logger.warning(
+                        f"Answer verification failed: quality={verification.quality_score:.2f}, "
+                        f"grounding={verification.grounding_score:.2f}, "
+                        f"issues={len(verification.issues)}"
+                    )
+                    
+                    # If quality is very low, could trigger replanning here
+                    # For now, we return the result with verification metadata
+                    # The orchestrator can decide whether to replan based on this
             else:
                 final_confidence = generated_answer.confidence
             
@@ -347,3 +358,84 @@ class RAGWorkflow:
                 "evaluator": self.evaluator.client is not None
             }
         }
+    
+    def should_replan(self, result: RAGResult) -> bool:
+        """
+        Determine if replanning is needed based on result quality.
+        
+        Args:
+            result: RAG result to evaluate
+            
+        Returns:
+            True if replanning is recommended
+        """
+        if not result.success:
+            return True
+        
+        if not result.verification:
+            return False
+        
+        # Replan if verification failed
+        if not result.verification.passed:
+            logger.info("Replanning recommended: verification failed")
+            return True
+        
+        # Replan if quality is very low
+        if result.verification.quality_score < 0.5:
+            logger.info(f"Replanning recommended: low quality score ({result.verification.quality_score:.2f})")
+            return True
+        
+        # Replan if grounding is insufficient
+        if result.verification.grounding_score < 0.6:
+            logger.info(f"Replanning recommended: low grounding score ({result.verification.grounding_score:.2f})")
+            return True
+        
+        # Replan if there are contradictions
+        if result.verification.contradiction_score > 0.3:
+            logger.info(f"Replanning recommended: contradictions detected ({result.verification.contradiction_score:.2f})")
+            return True
+        
+        return False
+    
+    def replan_and_retry(
+        self,
+        question: str,
+        previous_result: RAGResult,
+        max_retries: int = 2
+    ) -> RAGResult:
+        """
+        Replan and retry question processing with adjusted parameters.
+        
+        Args:
+            question: Original question
+            previous_result: Previous failed result
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            New RAG result
+        """
+        logger.info(f"Replanning question processing (attempt 1/{max_retries})")
+        
+        # Strategy 1: Increase retrieval k
+        increased_k = min(self.retrieval_k * 2, 20)
+        result = self.process_question(question, custom_k=increased_k)
+        
+        if result.success and not self.should_replan(result):
+            logger.info("Replanning successful with increased retrieval")
+            return result
+        
+        # Strategy 2: Try without MMR (get most relevant, not diverse)
+        if max_retries > 1:
+            logger.info(f"Replanning question processing (attempt 2/{max_retries})")
+            original_mmr = self.use_mmr
+            self.use_mmr = False
+            result = self.process_question(question, custom_k=increased_k)
+            self.use_mmr = original_mmr
+            
+            if result.success and not self.should_replan(result):
+                logger.info("Replanning successful without MMR")
+                return result
+        
+        # If all strategies fail, return best result
+        logger.warning("Replanning exhausted all strategies")
+        return result if result.success else previous_result

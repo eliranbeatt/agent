@@ -16,8 +16,16 @@ router = APIRouter(prefix="/files", tags=["files"])
 # Initialize components
 config_loader = ConfigLoader()
 config = config_loader.load_config()
-file_processor = FileProcessor(config)
-context_manager = ContextManager(config)
+
+# Initialize context manager with proper configuration
+context_manager = ContextManager(
+    openai_api_key=os.getenv("OPENAI_API_KEY"),
+    vector_db_path=config.context.vector_db_path,
+    chunk_size=config.context.chunk_size,
+    chunk_overlap=config.context.chunk_overlap,
+    embedding_model=config.context.embedding_model,
+    context_config=config.context
+)
 
 # In-memory storage for file processing status (should be replaced with proper storage)
 file_status_store: Dict[str, FileProcessingStatus] = {}
@@ -61,14 +69,19 @@ async def upload_file(file: UploadFile = File(...)) -> FileUploadResponse:
             file_status_store[file_id].status = "processing"
             file_status_store[file_id].progress = 25.0
             
-            # Process file
+            # Process file through complete RAG pipeline
             result = context_manager.ingest_file(str(file_path))
             
-            # Update status
-            file_status_store[file_id].status = "completed"
-            file_status_store[file_id].progress = 100.0
-            file_status_store[file_id].chunks_created = result.get("chunks_created", 0)
-            file_status_store[file_id].completed_at = datetime.now()
+            # Update status based on ingestion result
+            if result.success:
+                file_status_store[file_id].status = "completed"
+                file_status_store[file_id].progress = 100.0
+                file_status_store[file_id].chunks_created = result.chunks_created
+                file_status_store[file_id].completed_at = datetime.now()
+            else:
+                file_status_store[file_id].status = "failed"
+                file_status_store[file_id].progress = 0.0
+                file_status_store[file_id].error = result.error
             
         except Exception as e:
             file_status_store[file_id].status = "failed"

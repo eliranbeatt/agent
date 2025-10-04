@@ -20,6 +20,16 @@ class Citation:
     end_char: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
     
+    @property
+    def score(self) -> float:
+        """Alias for relevance_score for API compatibility."""
+        return self.relevance_score
+    
+    @property
+    def content(self) -> str:
+        """Alias for content_snippet for API compatibility."""
+        return self.content_snippet
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert citation to dictionary."""
         return {
@@ -27,7 +37,9 @@ class Citation:
             "source_file": self.source_file,
             "page_number": self.page_number,
             "content_snippet": self.content_snippet,
+            "content": self.content_snippet,  # Include both for compatibility
             "relevance_score": self.relevance_score,
+            "score": self.relevance_score,  # Include both for compatibility
             "start_char": self.start_char,
             "end_char": self.end_char,
             "metadata": self.metadata
@@ -212,3 +224,53 @@ class CitationManager:
                 unique_citations.append(citation)
         
         return unique_citations
+    
+    def track_citation_usage(
+        self,
+        answer: str,
+        citations: List[Citation]
+    ) -> Dict[str, Any]:
+        """
+        Track which citations were actually used in the answer.
+        
+        This analyzes the answer text to determine which source chunks
+        were likely referenced.
+        
+        Args:
+            answer: Generated answer text
+            citations: Available citations
+            
+        Returns:
+            Dictionary with citation usage statistics
+        """
+        # Simple heuristic: check if citation content appears in answer
+        used_citations = []
+        unused_citations = []
+        
+        for citation in citations:
+            # Check if any significant phrase from the citation appears in the answer
+            # Use first 50 chars as a representative phrase
+            representative_phrase = citation.content_snippet[:50].lower()
+            words = representative_phrase.split()
+            
+            # Check if at least 3 consecutive words appear in answer
+            found = False
+            for i in range(len(words) - 2):
+                phrase = " ".join(words[i:i+3])
+                if phrase in answer.lower():
+                    found = True
+                    break
+            
+            if found:
+                used_citations.append(citation)
+            else:
+                unused_citations.append(citation)
+        
+        return {
+            "total_citations": len(citations),
+            "used_citations": len(used_citations),
+            "unused_citations": len(unused_citations),
+            "usage_rate": len(used_citations) / len(citations) if citations else 0.0,
+            "used_citation_ids": [c.chunk_id for c in used_citations],
+            "unused_citation_ids": [c.chunk_id for c in unused_citations]
+        }
