@@ -1,0 +1,39 @@
+# Workflow Configuration
+workflows:
+  rag_qa:
+    name: "RAG Question Answering"
+    description: "Answer questions using retrieved context"
+    enabled: true
+    triggers:
+      - "what"
+      - "how"
+      - "why"
+      - "explain"
+      - "tell me about"
+    steps:
+      - name: "retrieve_context"
+        description: "Retrieve relevant context"
+        node_type: "context_manager"
+      - name: "generate_answer"
+        description: "Generate answer with citations"
+        node_type: "rag_workflow"
+      - name: "verify_answer"
+        description: "Verify answer quality"
+        node_type: "evaluator"
+
+  summarize_extract:
+    name: "Summarize and Extract"
+    description: "Summarize documents and extract key information"
+    enabled: true
+    triggers:
+      - "summarize"
+      - "summary"
+      - "extract"
+      - "key points"
+    steps:
+      - name: "process_document"
+        description: "Process and chunk document"
+        node_type: "context_manager"
+      - name: "generate_summary"
+        description: "Generate summary"
+        node_type: "rag_workflow"

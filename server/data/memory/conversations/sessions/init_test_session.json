@@ -1,0 +1,38 @@
+{
+  "session_id": "init_test_session",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Test initialization",
+      "timestamp": "2025-10-04T18:56:00.285650",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system initialized",
+      "timestamp": "2025-10-04T18:56:00.286170",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "user",
+      "content": "Test initialization",
+      "timestamp": "2025-10-04T18:57:05.362408",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Memory system initialized",
+      "timestamp": "2025-10-04T18:57:05.369169",
+      "metadata": {
+        "test": true
+      }
+    }
+  ],
+  "updated_at": "2025-10-04T18:57:05.369180"
+}

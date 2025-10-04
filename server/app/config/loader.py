@@ -2,11 +2,14 @@
 
 import json
 import logging
+import os
 import re
 import threading
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable
+
+from dotenv import load_dotenv
 from dataclasses import asdict
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -58,6 +61,7 @@ class ConfigLoader:
         self.observer: Optional[Observer] = None
         self.reload_callbacks: list[Callable[[SystemConfig], None]] = []
         self._lock = threading.Lock()
+        load_dotenv()
         
     def load_config(self, config_files: Optional[Dict[str, str]] = None) -> SystemConfig:
         """
@@ -227,7 +231,7 @@ class ConfigLoader:
             
             # Extract global settings
             global_settings = {
-                'openai_api_key': config_data.get('openai_api_key'),
+                'openai_api_key': os.environ.get('OPENAI_API_KEY') or config_data.get('openai_api_key'),
                 'log_level': config_data.get('log_level', 'INFO'),
                 'debug_mode': config_data.get('debug_mode', False),
                 'config_reload_enabled': config_data.get('config_reload_enabled', True),

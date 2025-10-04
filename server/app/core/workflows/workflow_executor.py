@@ -10,7 +10,14 @@ from ..state import ExecutionState
 from .workflow_models import (
     WorkflowExecutionContext,
     WorkflowStepResult,
-    WorkflowStepStatus
+    WorkflowStepStatus,
+    WorkflowStatus
+)
+from ..monitoring import (
+    performance_monitor,
+    execution_tracer,
+    trace_context,
+    monitor_performance
 )
 
 
@@ -53,6 +60,23 @@ class WorkflowStepExecutor:
         start_time = time.time()
         logger.info(f"Executing workflow step: {step.name}")
         
+        # Start step trace
+        step_trace_id = execution_tracer.start_trace(
+            component="WorkflowStepExecutor",
+            operation=f"execute_step_{step.name}",
+            metadata={
+                "step_name": step.name,
+                "node_type": step.node_type,
+                "workflow": workflow_context.workflow_name
+            }
+        )
+        
+        # Record step start metric
+        performance_monitor.increment_counter(
+            "workflow.steps.started",
+            tags={"step": step.name, "node_type": step.node_type}
+        )
+        
         try:
             # Route to appropriate handler based on node type
             if step.node_type == "context_manager":
@@ -90,13 +114,39 @@ class WorkflowStepExecutor:
             )
             
             execution_time = (time.time() - start_time) * 1000  # Convert to ms
+            tokens_used = output.get("tokens_used", 0) if isinstance(output, dict) else 0
+            
+            # Record step success metrics
+            performance_monitor.increment_counter(
+                "workflow.steps.completed",
+                tags={"step": step.name, "node_type": step.node_type, "status": "success"}
+            )
+            performance_monitor.record_histogram(
+                "workflow.step.execution_time_ms",
+                execution_time,
+                tags={"step": step.name, "node_type": step.node_type}
+            )
+            if tokens_used > 0:
+                performance_monitor.record_histogram(
+                    "workflow.step.tokens_used",
+                    tokens_used,
+                    tags={"step": step.name, "node_type": step.node_type}
+                )
+            
+            # End step trace successfully
+            execution_tracer.end_trace(step_trace_id, "success", {
+                "execution_time_ms": execution_time,
+                "tokens_used": tokens_used,
+                "criteria_met": len(criteria_met),
+                "criteria_failed": len(criteria_failed)
+            })
             
             return WorkflowStepResult(
                 step_name=step.name,
                 status=WorkflowStepStatus.COMPLETED,
                 output=output,
                 execution_time_ms=execution_time,
-                tokens_used=output.get("tokens_used", 0) if isinstance(output, dict) else 0,
+                tokens_used=tokens_used,
                 success_criteria_met=criteria_met,
                 success_criteria_failed=criteria_failed
             )
@@ -104,6 +154,19 @@ class WorkflowStepExecutor:
         except Exception as e:
             execution_time = (time.time() - start_time) * 1000
             logger.error(f"Step '{step.name}' failed: {str(e)}")
+            
+            # Record step failure metrics
+            performance_monitor.increment_counter(
+                "workflow.steps.failed",
+                tags={"step": step.name, "node_type": step.node_type, "error_type": type(e).__name__}
+            )
+            
+            # End step trace with error
+            execution_tracer.end_trace(step_trace_id, "error", {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "execution_time_ms": execution_time
+            })
             
             return WorkflowStepResult(
                 step_name=step.name,
@@ -448,7 +511,8 @@ class WorkflowExecutor:
         self,
         user_request: str,
         execution_state: ExecutionState,
-        input_data: Optional[Dict[str, Any]] = None
+        input_data: Optional[Dict[str, Any]] = None,
+        resume_from_checkpoint: Optional[str] = None
     ) -> WorkflowExecutionContext:
         """
         Execute the complete workflow.
@@ -457,6 +521,7 @@ class WorkflowExecutor:
             user_request: User's request
             execution_state: Global execution state
             input_data: Optional input data for the workflow
+            resume_from_checkpoint: Optional checkpoint ID to resume from
             
         Returns:
             WorkflowExecutionContext with execution results
@@ -470,16 +535,50 @@ class WorkflowExecutor:
             input_data=input_data or {}
         )
         
-        workflow_context.start_execution()
+        # Resume from checkpoint if provided
+        start_step = 0
+        if resume_from_checkpoint:
+            if workflow_context.restore_from_checkpoint(resume_from_checkpoint):
+                start_step = workflow_context.current_step_index
+                workflow_context.resume_execution()
+                logger.info(f"Resuming workflow from checkpoint at step {start_step}")
+            else:
+                logger.warning(f"Checkpoint {resume_from_checkpoint} not found, starting from beginning")
+        
+        if not resume_from_checkpoint:
+            workflow_context.start_execution()
         
         logger.info(
             f"Starting workflow execution: {self.workflow_config.name} "
             f"({workflow_context.total_steps} steps)"
         )
         
+        # Start workflow execution trace
+        trace_id = execution_tracer.start_trace(
+            component="WorkflowExecutor",
+            operation=f"execute_{self.workflow_config.name}",
+            metadata={
+                "workflow_name": self.workflow_config.name,
+                "total_steps": workflow_context.total_steps,
+                "user_request": user_request[:100]
+            }
+        )
+        
+        # Record workflow start metric
+        performance_monitor.increment_counter(
+            "workflow.executions.started",
+            tags={"workflow": self.workflow_config.name}
+        )
+        
         try:
             # Execute each step in sequence
-            for step_index, step in enumerate(self.workflow_config.steps):
+            for step_index in range(start_step, len(self.workflow_config.steps)):
+                # Check if workflow is paused
+                if workflow_context.is_paused:
+                    logger.info(f"Workflow paused at step {step_index}")
+                    return workflow_context
+                
+                step = self.workflow_config.steps[step_index]
                 workflow_context.current_step_index = step_index
                 
                 logger.info(
@@ -500,6 +599,9 @@ class WorkflowExecutor:
                 execution_state.increment_step()
                 execution_state.add_tokens_used(step_result.tokens_used)
                 
+                # Create checkpoint after each step
+                checkpoint = workflow_context.create_checkpoint()
+                
                 # Log step completion
                 execution_state.log_execution_step(
                     node_name="WorkflowExecutor",
@@ -509,7 +611,8 @@ class WorkflowExecutor:
                         "execution_time_ms": step_result.execution_time_ms,
                         "tokens_used": step_result.tokens_used,
                         "success_criteria_met": len(step_result.success_criteria_met),
-                        "success_criteria_failed": len(step_result.success_criteria_failed)
+                        "success_criteria_failed": len(step_result.success_criteria_failed),
+                        "checkpoint_id": checkpoint["checkpoint_id"]
                     }
                 )
                 
@@ -520,12 +623,8 @@ class WorkflowExecutor:
                     workflow_context.fail_execution(error_msg)
                     return workflow_context
                     
-                # Check if critical success criteria failed
-                if step_result.success_criteria_failed:
-                    logger.warning(
-                        f"Step '{step.name}' has failed criteria: "
-                        f"{step_result.success_criteria_failed}"
-                    )
+                # Validate success criteria after step
+                self._validate_step_criteria(step, step_result, workflow_context, execution_state)
                     
             # Check overall workflow success criteria
             workflow_success = self._check_workflow_success(workflow_context)
@@ -540,17 +639,167 @@ class WorkflowExecutor:
                     f"(tokens: {workflow_context.total_tokens_used}, "
                     f"time: {workflow_context.total_execution_time_ms:.0f}ms)"
                 )
+                
+                # Record success metrics
+                performance_monitor.increment_counter(
+                    "workflow.executions.completed",
+                    tags={"workflow": self.workflow_config.name, "status": "success"}
+                )
+                performance_monitor.record_histogram(
+                    "workflow.execution_time_ms",
+                    workflow_context.total_execution_time_ms,
+                    tags={"workflow": self.workflow_config.name}
+                )
+                performance_monitor.record_histogram(
+                    "workflow.tokens_used",
+                    workflow_context.total_tokens_used,
+                    tags={"workflow": self.workflow_config.name}
+                )
+                
+                # End trace successfully
+                execution_tracer.end_trace(trace_id, "success", {
+                    "tokens_used": workflow_context.total_tokens_used,
+                    "execution_time_ms": workflow_context.total_execution_time_ms,
+                    "steps_completed": len(workflow_context.step_results)
+                })
             else:
                 error_msg = "Workflow success criteria not met"
                 logger.error(error_msg)
-                workflow_context.fail_execution(error_msg)
+                
+                # Check if replanning should be triggered
+                if self._should_trigger_replan(workflow_context):
+                    logger.info("Triggering replan due to failed success criteria")
+                    workflow_context.intermediate_results["replan_required"] = True
+                    workflow_context.intermediate_results["replan_reason"] = "workflow_criteria_not_met"
+                    execution_state.next_node = "Planner"  # Route back to planner
+                    
+                    # Record replan metric
+                    performance_monitor.increment_counter(
+                        "workflow.replans.triggered",
+                        tags={"workflow": self.workflow_config.name}
+                    )
+                else:
+                    workflow_context.fail_execution(error_msg)
+                    
+                    # Record failure metrics
+                    performance_monitor.increment_counter(
+                        "workflow.executions.failed",
+                        tags={"workflow": self.workflow_config.name, "reason": "criteria_not_met"}
+                    )
+                    
+                    # End trace with failure
+                    execution_tracer.end_trace(trace_id, "failed", {
+                        "error": error_msg,
+                        "failed_criteria": workflow_context.intermediate_results.get("failed_criteria", [])
+                    })
                 
         except Exception as e:
             error_msg = f"Workflow execution failed: {str(e)}"
             logger.error(error_msg, exc_info=True)
             workflow_context.fail_execution(error_msg)
             
+            # Record error metrics
+            performance_monitor.increment_counter(
+                "workflow.executions.errors",
+                tags={"workflow": self.workflow_config.name, "error_type": type(e).__name__}
+            )
+            
+            # End trace with error
+            execution_tracer.end_trace(trace_id, "error", {
+                "error": error_msg,
+                "error_type": type(e).__name__
+            })
+            
         return workflow_context
+    
+    def pause_workflow(self, workflow_context: WorkflowExecutionContext) -> None:
+        """
+        Pause workflow execution.
+        
+        Args:
+            workflow_context: Workflow execution context to pause
+        """
+        workflow_context.pause_execution()
+        logger.info(f"Workflow '{workflow_context.workflow_name}' paused at step {workflow_context.current_step_index}")
+        
+    def resume_workflow(
+        self,
+        workflow_context: WorkflowExecutionContext,
+        execution_state: ExecutionState
+    ) -> WorkflowExecutionContext:
+        """
+        Resume paused workflow execution.
+        
+        Args:
+            workflow_context: Workflow execution context to resume
+            execution_state: Global execution state
+            
+        Returns:
+            Updated workflow execution context
+        """
+        if not workflow_context.can_resume():
+            logger.error(f"Cannot resume workflow in status: {workflow_context.status.value}")
+            return workflow_context
+            
+        logger.info(f"Resuming workflow '{workflow_context.workflow_name}' from step {workflow_context.current_step_index}")
+        
+        # Resume execution from current step
+        return self.execute(
+            user_request=workflow_context.user_request,
+            execution_state=execution_state,
+            input_data=workflow_context.input_data,
+            resume_from_checkpoint=workflow_context.get_latest_checkpoint()["checkpoint_id"] if workflow_context.checkpoints else None
+        )
+    
+    def _validate_step_criteria(
+        self,
+        step: ConfigWorkflowStep,
+        step_result: WorkflowStepResult,
+        workflow_context: WorkflowExecutionContext,
+        execution_state: ExecutionState
+    ) -> None:
+        """
+        Validate success criteria after step execution.
+        
+        Args:
+            step: Step configuration
+            step_result: Step execution result
+            workflow_context: Workflow execution context
+            execution_state: Global execution state
+        """
+        # Log criteria validation
+        if step_result.success_criteria_met:
+            logger.info(
+                f"Step '{step.name}' success criteria met:\n" +
+                "\n".join(f"  ✓ {c}" for c in step_result.success_criteria_met)
+            )
+            
+        if step_result.success_criteria_failed:
+            logger.warning(
+                f"Step '{step.name}' success criteria failed:\n" +
+                "\n".join(f"  ✗ {c}" for c in step_result.success_criteria_failed)
+            )
+            
+            # Store failed criteria for potential replanning
+            if "step_failures" not in workflow_context.intermediate_results:
+                workflow_context.intermediate_results["step_failures"] = []
+                
+            workflow_context.intermediate_results["step_failures"].append({
+                "step_name": step.name,
+                "failed_criteria": step_result.success_criteria_failed,
+                "step_index": workflow_context.current_step_index
+            })
+            
+            # Log to execution state for monitoring
+            execution_state.log_execution_step(
+                node_name="WorkflowExecutor",
+                action="criteria_validation_failed",
+                details={
+                    "step_name": step.name,
+                    "failed_criteria": step_result.success_criteria_failed,
+                    "met_criteria": step_result.success_criteria_met
+                }
+            )
     
     def _check_workflow_success(self, workflow_context: WorkflowExecutionContext) -> bool:
         """
@@ -563,18 +812,33 @@ class WorkflowExecutor:
             True if workflow succeeded, False otherwise
         """
         # Check if all steps completed
+        failed_steps = []
         for result in workflow_context.step_results:
             if result.status != WorkflowStepStatus.COMPLETED:
-                return False
+                failed_steps.append(result.step_name)
+                
+        if failed_steps:
+            logger.error(f"Workflow has failed steps: {', '.join(failed_steps)}")
+            return False
                 
         # Check workflow-level success criteria
+        failed_criteria = []
         if self.workflow_config.success_criteria:
             for criterion in self.workflow_config.success_criteria:
                 # Simple heuristic checking
                 if not self._evaluate_workflow_criterion(criterion, workflow_context):
-                    logger.warning(f"Workflow criterion not met: {criterion}")
-                    return False
+                    failed_criteria.append(criterion)
                     
+        if failed_criteria:
+            logger.error(
+                f"Workflow success criteria not met:\n" +
+                "\n".join(f"  - {c}" for c in failed_criteria)
+            )
+            # Store failed criteria in context for potential replanning
+            workflow_context.intermediate_results["failed_criteria"] = failed_criteria
+            return False
+                    
+        logger.info(f"All workflow success criteria met for '{self.workflow_config.name}'")
         return True
     
     def _evaluate_workflow_criterion(
@@ -612,6 +876,39 @@ class WorkflowExecutor:
             
         # Default: assume criterion is met
         return True
+    
+    def _should_trigger_replan(self, workflow_context: WorkflowExecutionContext) -> bool:
+        """
+        Determine if replanning should be triggered based on failed criteria.
+        
+        Args:
+            workflow_context: Workflow execution context
+            
+        Returns:
+            True if replanning should be triggered, False otherwise
+        """
+        # Check if there are failed criteria
+        failed_criteria = workflow_context.intermediate_results.get("failed_criteria", [])
+        step_failures = workflow_context.intermediate_results.get("step_failures", [])
+        
+        # Don't replan if no failures
+        if not failed_criteria and not step_failures:
+            return False
+            
+        # Don't replan if we've already tried multiple times
+        replan_count = workflow_context.intermediate_results.get("replan_count", 0)
+        if replan_count >= 2:
+            logger.warning(f"Maximum replan attempts reached ({replan_count})")
+            return False
+            
+        # Trigger replan if critical criteria failed
+        critical_keywords = ["answer", "verified", "grounded", "quality"]
+        for criterion in failed_criteria:
+            if any(keyword in criterion.lower() for keyword in critical_keywords):
+                logger.info(f"Critical criterion failed, triggering replan: {criterion}")
+                return True
+                
+        return False
     
     def _extract_final_output(self, workflow_context: WorkflowExecutionContext) -> Dict[str, Any]:
         """

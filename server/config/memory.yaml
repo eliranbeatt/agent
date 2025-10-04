@@ -1,0 +1,17 @@
+# Memory Configuration
+memory:
+  provider: "mem0"
+  ttl_days: 30
+  max_entries: 10000
+  
+  collections:
+    profile:
+      enabled: true
+      max_size: 100
+    facts:
+      enabled: true
+      max_size: 1000
+    conversations:
+      enabled: true
+      max_size: 5000
+      retention_days: 30

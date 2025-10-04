@@ -1,0 +1,15 @@
+# Agent Configuration
+orchestrator:
+  max_iterations: 6
+  token_budget: 50000
+  workflow_confidence_threshold: 0.7
+  timeout_seconds: 300
+
+planner:
+  max_tasks: 10
+  decomposition_strategy: "minimal"
+
+agent_generator:
+  max_concurrent_agents: 5
+  default_max_steps: 4
+  default_token_limit: 2000

@@ -49,19 +49,7 @@ class HealthChecker:
         self.add_check("Python Version", passed, message)
         return passed
     
-    def check_environment_variables(self) -> bool:
-        """Check required environment variables."""
-        required_vars = ["OPENAI_API_KEY"]
-        missing = []
-        
-        for var in required_vars:
-            if not os.getenv(var):
-                missing.append(var)
-        
-        passed = len(missing) == 0
-        message = "All required variables set" if passed else f"Missing: {', '.join(missing)}"
-        self.add_check("Environment Variables", passed, message)
-        return passed
+
     
     def check_directories(self) -> bool:
         """Check required directories exist."""
@@ -148,7 +136,12 @@ class HealthChecker:
         """Check OpenAI API connection."""
         try:
             import openai
-            api_key = os.getenv("OPENAI_API_KEY")
+            
+            if not self.config:
+                self.add_check("OpenAI Connection", False, "Configuration not loaded")
+                return False
+
+            api_key = self.config.openai_api_key
             
             if not api_key or api_key == "your-api-key-here":
                 self.add_check("OpenAI Connection", False, "API key not configured")
@@ -172,7 +165,7 @@ class HealthChecker:
                 self.add_check("Vector Database", False, "Configuration not loaded")
                 return False
             
-            vector_store = VectorStore(self.config)
+            vector_store = VectorStore(persist_directory=self.config.context.vector_db_path)
             # Try a simple search
             results = vector_store.search("test", k=1)
             
@@ -192,7 +185,6 @@ class HealthChecker:
         
         # Run checks
         self.check_python_version()
-        self.check_environment_variables()
         self.check_directories()
         self.check_configuration()
         self.check_dependencies()

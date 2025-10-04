@@ -43,11 +43,11 @@ def create_directories():
             logger.info(f"Directory already exists: {directory}")
 
 
-def initialize_vector_db(config):
+def initialize_vector_db(context_config):
     """Initialize vector database."""
     try:
         logger.info("Initializing vector database...")
-        vector_store = VectorStore(config)
+        vector_store = VectorStore(persist_directory=context_config.vector_db_path)
         
         # Test connection
         test_result = vector_store.search("test query", k=1)
@@ -205,7 +205,7 @@ def main():
         # Initialize vector database
         logger.info("\n[4/4] Initializing databases...")
         try:
-            initialize_vector_db(config)
+            initialize_vector_db(config.context)
         except Exception as e:
             logger.warning(f"Vector database initialization skipped: {e}")
         
