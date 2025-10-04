@@ -28,6 +28,7 @@ class TestWorkflowMatcher:
                 name="RAG QA",
                 description="Answer questions based on documents",
                 triggers=["question about document", "what does the document say"],
+                steps=[WorkflowStep(name="test", description="test", node_type="test")],
                 confidence_threshold=0.7,
                 enabled=True
             )
@@ -41,7 +42,7 @@ class TestWorkflowMatcher:
         )
         
         assert workflow_name == "rag_qa"
-        assert confidence > 0.3  # Adjusted threshold based on actual matching algorithm
+        assert confidence > 0.5  # Should match well with exact trigger phrase
     
     def test_match_summarize_workflow(self):
         """Test matching summarize workflow."""
@@ -50,6 +51,7 @@ class TestWorkflowMatcher:
                 name="Summarize",
                 description="Summarize documents",
                 triggers=["summarize", "summary", "key points"],
+                steps=[WorkflowStep(name="test", description="test", node_type="test")],
                 confidence_threshold=0.7,
                 enabled=True
             )
@@ -71,6 +73,7 @@ class TestWorkflowMatcher:
                 name="Compare",
                 description="Compare multiple documents",
                 triggers=["compare", "difference", "versus"],
+                steps=[WorkflowStep(name="test", description="test", node_type="test")],
                 confidence_threshold=0.7,
                 enabled=True
             )
@@ -92,6 +95,7 @@ class TestWorkflowMatcher:
                 name="RAG QA",
                 description="Answer questions",
                 triggers=["specific trigger phrase"],
+                steps=[WorkflowStep(name="test", description="test", node_type="test")],
                 confidence_threshold=0.9,
                 enabled=True
             )
@@ -113,6 +117,7 @@ class TestWorkflowMatcher:
                 name="Disabled",
                 description="This is disabled",
                 triggers=["disabled trigger"],
+                steps=[WorkflowStep(name="test", description="test", node_type="test")],
                 confidence_threshold=0.7,
                 enabled=False
             ),
@@ -120,6 +125,7 @@ class TestWorkflowMatcher:
                 name="Enabled",
                 description="This is enabled",
                 triggers=["enabled trigger"],
+                steps=[WorkflowStep(name="test", description="test", node_type="test")],
                 confidence_threshold=0.7,
                 enabled=True
             )
@@ -141,6 +147,7 @@ class TestWorkflowMatcher:
                 name="RAG QA",
                 description="Answer questions about documents",
                 triggers=["question", "what"],
+                steps=[WorkflowStep(name="test", description="test", node_type="test")],
                 confidence_threshold=0.7,
                 enabled=True
             )
@@ -170,6 +177,7 @@ class TestWorkflowMatcher:
                 name="RAG QA",
                 description="Answer questions",
                 triggers=["question", "what"],
+                steps=[WorkflowStep(name="test", description="test", node_type="test")],
                 confidence_threshold=0.7,
                 enabled=True
             ),
@@ -177,6 +185,7 @@ class TestWorkflowMatcher:
                 name="Summarize",
                 description="Summarize documents",
                 triggers=["summarize", "summary"],
+                steps=[WorkflowStep(name="test", description="test", node_type="test")],
                 confidence_threshold=0.7,
                 enabled=True
             )

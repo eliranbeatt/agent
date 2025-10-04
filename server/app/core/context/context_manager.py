@@ -48,7 +48,8 @@ class ContextManager:
         vector_db_path: str = "./data/chroma_db",
         chunk_size: int = 1000,
         chunk_overlap: int = 100,
-        embedding_model: str = "text-embedding-3-small"
+        embedding_model: str = "text-embedding-3-small",
+        context_config: Optional[Any] = None
     ):
         """
         Initialize the context manager.
@@ -59,6 +60,7 @@ class ContextManager:
             chunk_size: Target chunk size in tokens
             chunk_overlap: Overlap between chunks in tokens
             embedding_model: OpenAI embedding model to use
+            context_config: Optional ContextConfig object for file processing settings
         """
         self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         
@@ -67,7 +69,7 @@ class ContextManager:
         
         # Initialize components
         try:
-            self.file_processor = FileProcessor()
+            self.file_processor = FileProcessor(config=context_config)
             self.chunker = ContentChunker(
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap

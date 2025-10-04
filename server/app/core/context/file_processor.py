@@ -59,39 +59,57 @@ class ProcessingResult:
     page_count: Optional[int] = None
 
 
-from ...config.models import SystemConfig
+from ...config.models import SystemConfig, ContextConfig
 
 class FileProcessor:
     """Handles file ingestion and content extraction for various document types."""
     
-    def __init__(self):
-        """Initialize the file processor."""
-        self.supported_extensions = {
-            '.pdf': FileType.PDF,
-            '.docx': FileType.DOCX,
-            '.xlsx': FileType.XLSX,
-            '.pptx': FileType.PPTX,
-            '.doc': FileType.DOC,
-            '.xls': FileType.XLS,
-            '.ppt': FileType.PPT,
-            '.txt': FileType.TEXT,
-            '.png': FileType.IMAGE,
-            '.jpg': FileType.IMAGE,
-            '.jpeg': FileType.IMAGE,
-            '.tiff': FileType.IMAGE,
-            '.bmp': FileType.IMAGE,
-            '.md': FileType.TEXT,
-        }
+    def __init__(self, config: Optional[ContextConfig] = None):
+        """
+        Initialize the file processor.
+        
+        Args:
+            config: Context configuration with file processing settings
+        """
+        self.config = config or ContextConfig()
+        
+        # Extract configuration values
+        self.max_file_size_mb = self.config.max_file_size_mb
+        self.ocr_enabled = self.config.ocr_enabled
+        self.ocr_language = self.config.ocr_language
+        
+        # Build supported extensions from config
+        self.supported_extensions = {}
+        for ext in self.config.supported_file_types:
+            ext_lower = ext.lower()
+            if ext_lower == '.pdf':
+                self.supported_extensions[ext_lower] = FileType.PDF
+            elif ext_lower in ['.docx', '.doc']:
+                self.supported_extensions[ext_lower] = FileType.DOCX
+            elif ext_lower in ['.xlsx', '.xls']:
+                self.supported_extensions[ext_lower] = FileType.XLSX
+            elif ext_lower in ['.pptx', '.ppt']:
+                self.supported_extensions[ext_lower] = FileType.PPTX
+            elif ext_lower == '.txt':
+                self.supported_extensions[ext_lower] = FileType.TEXT
+            elif ext_lower == '.md':
+                self.supported_extensions[ext_lower] = FileType.TEXT
+            elif ext_lower in ['.png', '.jpg', '.jpeg', '.tiff', '.bmp']:
+                self.supported_extensions[ext_lower] = FileType.IMAGE
         
         # Configure Tesseract if available
         self._configure_tesseract()
     
     def _configure_tesseract(self) -> None:
         """Configure Tesseract OCR engine."""
+        if not self.ocr_enabled:
+            logger.info("OCR is disabled in configuration")
+            return
+            
         try:
             # Test if Tesseract is available
             pytesseract.get_tesseract_version()
-            logger.info("Tesseract OCR is available")
+            logger.info(f"Tesseract OCR is available (language: {self.ocr_language})")
         except Exception as e:
             logger.warning(f"Tesseract OCR not available: {e}")
     
@@ -153,6 +171,16 @@ class FileProcessor:
                 content="",
                 metadata={},
                 error=f"File not found: {file_path}"
+            )
+        
+        # Check file size
+        file_size_mb = file_path.stat().st_size / (1024 * 1024)
+        if file_size_mb > self.max_file_size_mb:
+            return ProcessingResult(
+                success=False,
+                content="",
+                metadata={"file_path": str(file_path), "file_size_mb": file_size_mb},
+                error=f"File size ({file_size_mb:.2f} MB) exceeds maximum allowed size ({self.max_file_size_mb} MB)"
             )
         
         file_type = self.detect_file_type(file_path)
@@ -285,10 +313,19 @@ class FileProcessor:
     
     def _process_image(self, file_path: Path) -> ProcessingResult:
         """Process images using OCR."""
+        if not self.ocr_enabled:
+            return ProcessingResult(
+                success=False,
+                content="",
+                metadata={"file_path": str(file_path)},
+                error="OCR is disabled in configuration",
+                file_type=FileType.IMAGE
+            )
+            
         try:
             # Open image and perform OCR
             image = Image.open(file_path)
-            content = pytesseract.image_to_string(image)
+            content = pytesseract.image_to_string(image, lang=self.ocr_language)
             
             return ProcessingResult(
                 success=True,

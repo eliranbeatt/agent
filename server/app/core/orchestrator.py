@@ -6,7 +6,7 @@ from datetime import datetime
 
 from ..config.models import SystemConfig, WorkflowConfig
 from .base_nodes import ConditionalNode
-from .state import ExecutionState, ExecutionPath
+from .state import ExecutionState, ExecutionPath, TaskStatus
 
 
 logger = logging.getLogger(__name__)
@@ -163,14 +163,20 @@ class MainOrchestrator(ConditionalNode):
         state.workflow_confidence = confidence
         threshold = self.system_config.orchestrator.workflow_confidence_threshold
         
+        # Log matching details for debugging
+        self.logger.debug(
+            f"Workflow matching: request='{state.user_request[:50]}...', "
+            f"best_match='{workflow_name}', confidence={confidence:.3f}, threshold={threshold}"
+        )
+        
         if workflow_name and confidence >= threshold:
             # Use predefined workflow
             state.execution_path = ExecutionPath.PREDEFINED_WORKFLOW
             state.selected_workflow = workflow_name
             
             self.logger.info(
-                f"Selected predefined workflow '{workflow_name}' "
-                f"with confidence {confidence:.2f}"
+                f"✓ Selected predefined workflow '{workflow_name}' "
+                f"with confidence {confidence:.3f} (threshold: {threshold})"
             )
             
         else:
@@ -178,8 +184,8 @@ class MainOrchestrator(ConditionalNode):
             state.execution_path = ExecutionPath.PLANNER_DRIVEN
             
             self.logger.info(
-                f"Selected planner-driven execution "
-                f"(best match: {workflow_name or 'none'}, confidence: {confidence:.2f})"
+                f"→ Selected planner-driven execution "
+                f"(best match: {workflow_name or 'none'}, confidence: {confidence:.3f} < threshold: {threshold})"
             )
             
         # Log path selection

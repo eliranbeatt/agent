@@ -56,16 +56,16 @@ class TestConfigDataclassValidation:
     def test_planner_config_valid(self):
         """Test valid PlannerConfig."""
         config = PlannerConfig(
-            max_tasks_per_request=10,
+            max_tasks=10,
             min_task_complexity=1,
             max_task_complexity=5
         )
-        assert config.max_tasks_per_request == 10
+        assert config.max_tasks == 10
     
     def test_planner_config_invalid_max_tasks(self):
-        """Test PlannerConfig with invalid max_tasks_per_request."""
-        with pytest.raises(ValueError, match="max_tasks_per_request must be positive"):
-            PlannerConfig(max_tasks_per_request=0)
+        """Test PlannerConfig with invalid max_tasks."""
+        with pytest.raises(ValueError, match="max_tasks must be positive"):
+            PlannerConfig(max_tasks=0)
     
     def test_planner_config_invalid_complexity_range(self):
         """Test PlannerConfig with invalid complexity range."""
@@ -241,7 +241,7 @@ class TestConfigLoader:
         
         assert config is not None
         assert config.orchestrator.max_iterations == 6
-        assert config.planner.max_tasks_per_request == 10
+        assert config.planner.max_tasks == 10
         assert config.memory.profile_ttl_days == 365
     
     def test_load_config_with_invalid_values(self, temp_config_dir):

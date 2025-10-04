@@ -3,6 +3,7 @@
 import logging
 from typing import Dict, List, Optional, Tuple
 import re
+from difflib import SequenceMatcher
 
 from ...config.models import WorkflowConfig
 
@@ -112,33 +113,27 @@ class WorkflowMatcher:
         """
         confidence = 0.0
         
-        # 1. Exact trigger matching (40% weight)
+        # 1. Exact trigger matching (50% weight - increased from 40%)
         trigger_score = self._calculate_trigger_score(request, workflow.triggers)
-        confidence += trigger_score * 0.4
+        confidence += trigger_score * 0.5
         
-        # 2. Pattern matching (30% weight)
+        # 2. Pattern matching (25% weight - reduced from 30%)
         pattern_score = self._calculate_pattern_score(request_words, workflow.name)
-        confidence += pattern_score * 0.3
+        confidence += pattern_score * 0.25
         
-        # 3. Semantic similarity (20% weight)
+        # 3. Semantic similarity (15% weight - reduced from 20%)
         semantic_score = self._calculate_semantic_score(request, workflow)
-        confidence += semantic_score * 0.2
+        confidence += semantic_score * 0.15
         
         # 4. Context relevance (10% weight)
         context_score = self._calculate_context_score(request, workflow, context)
         confidence += context_score * 0.1
         
-        # Apply workflow-specific confidence threshold adjustment
-        if hasattr(workflow, 'confidence_threshold'):
-            # Slightly boost workflows with lower thresholds (they're more general)
-            threshold_factor = 1.0 - (workflow.confidence_threshold * 0.1)
-            confidence *= threshold_factor
-            
         return min(confidence, 1.0)
     
     def _calculate_trigger_score(self, request: str, triggers: List[str]) -> float:
         """
-        Calculate score based on trigger word matches.
+        Calculate score based on trigger word matches with fuzzy matching.
         
         Args:
             request: Lowercase user request
@@ -152,24 +147,44 @@ class WorkflowMatcher:
             
         matches = 0
         partial_matches = 0
+        fuzzy_matches = 0
+        max_single_score = 0.0
         
         for trigger in triggers:
             trigger_lower = trigger.lower()
             
-            # Exact phrase match
+            # 1. Exact phrase match - full credit
             if trigger_lower in request:
                 matches += 1
+                max_single_score = max(max_single_score, 1.0)
             else:
-                # Partial word match
+                # 2. Partial word match
                 trigger_words = set(self._tokenize(trigger_lower))
                 request_words = set(self._tokenize(request))
                 overlap = len(trigger_words.intersection(request_words))
                 
                 if overlap > 0:
-                    partial_matches += overlap / len(trigger_words)
-                    
-        total_score = matches + (partial_matches * 0.5)
-        return min(total_score / len(triggers), 1.0)
+                    # Give more credit for partial matches
+                    match_ratio = overlap / len(trigger_words)
+                    partial_matches += match_ratio
+                    max_single_score = max(max_single_score, match_ratio)
+                else:
+                    # 3. Fuzzy matching for similar phrases
+                    fuzzy_score = self._fuzzy_match_score(trigger_lower, request, threshold=0.5)
+                    if fuzzy_score > 0:
+                        fuzzy_matches += fuzzy_score
+                        max_single_score = max(max_single_score, fuzzy_score * 0.9)
+        
+        # Combine scores with appropriate weights
+        # Exact matches: full weight
+        # Partial matches: 70% weight
+        # Fuzzy matches: 50% weight
+        total_score = matches + (partial_matches * 0.7) + (fuzzy_matches * 0.5)
+        avg_score = total_score / len(triggers)
+        
+        # Use the better of: average score or best single match
+        # This helps when one trigger matches very well
+        return min(max(avg_score, max_single_score * 0.85), 1.0)
     
     def _calculate_pattern_score(self, request_words: set, workflow_name: str) -> float:
         """
@@ -189,15 +204,18 @@ class WorkflowMatcher:
         if workflow_name_words.intersection(request_words):
             return 1.0
             
-        # Check pattern keywords
+        # Check pattern keywords with better scoring
+        best_score = 0.0
         for pattern_type, keywords in self.workflow_patterns.items():
             if pattern_type in workflow_name.lower():
                 keyword_set = set(keywords)
                 matches = len(request_words.intersection(keyword_set))
                 if matches > 0:
-                    return min(matches / len(keyword_set), 1.0)
+                    # Give more credit for multiple keyword matches
+                    score = min((matches / max(len(keyword_set), 3)) * 1.5, 1.0)
+                    best_score = max(best_score, score)
                     
-        return 0.0
+        return best_score
     
     def _calculate_semantic_score(self, request: str, workflow: WorkflowConfig) -> float:
         """
@@ -297,6 +315,24 @@ class WorkflowMatcher:
         # Remove punctuation and split on whitespace
         text = re.sub(r'[^\w\s]', ' ', text)
         return [word for word in text.split() if word]
+    
+    def _fuzzy_match_score(self, text1: str, text2: str, threshold: float = 0.6) -> float:
+        """
+        Calculate fuzzy match score between two strings.
+        
+        Args:
+            text1: First text
+            text2: Second text
+            threshold: Minimum similarity threshold
+            
+        Returns:
+            Similarity score between 0.0 and 1.0
+        """
+        # Use SequenceMatcher for fuzzy string matching
+        similarity = SequenceMatcher(None, text1.lower(), text2.lower()).ratio()
+        
+        # Only return score if above threshold
+        return similarity if similarity >= threshold else 0.0
     
     def get_workflow_suggestions(
         self,

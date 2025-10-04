@@ -214,8 +214,8 @@ class SystemConfig:
             errors.append("orchestrator.workflow_confidence_threshold must be between 0 and 1")
             
         # Validate planner settings
-        if self.planner.max_tasks_per_request <= 0:
-            errors.append("planner.max_tasks_per_request must be positive")
+        if self.planner.max_tasks <= 0:
+            errors.append("planner.max_tasks must be positive")
             
         # Validate agent generator settings
         if self.agent_generator.max_concurrent_agents <= 0:
