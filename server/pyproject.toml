@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-agent-studio-server"
+version = "0.1.0"
+description = "FastAPI backend for Local Agent Studio"
+readme = "README.md"
+authors = [{name = "Local Agent Studio", email = "dev@local-agent.studio"}]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+    "websockets>=12.0",
+    "langgraph>=0.2.14",
+    "langchain>=0.2.14",
+    "pydantic-settings>=2.3.4",
+    "pyyaml>=6.0.1",
+    "watchdog>=4.0.0",
+    "unstructured[all-docs]>=0.15.0",
+    "pytesseract>=0.3.10",
+    "pillow>=10.0.0",
+    "pypdf>=4.0.0",
+    "python-magic>=0.4.27",
+    "openai>=1.0.0",
+    "chromadb>=0.4.0",
+    "tiktoken>=0.5.0",
+    "mem0ai>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["app"]

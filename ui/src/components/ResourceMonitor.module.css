@@ -1,0 +1,136 @@
+.container {
+  padding: 1rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .container {
+    background: #2d3748;
+    border-color: #4a5568;
+  }
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+}
+
+@media (prefers-color-scheme: dark) {
+  .title {
+    color: #e2e8f0;
+  }
+}
+
+.metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.metricHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metricLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #4a5568;
+}
+
+@media (prefers-color-scheme: dark) {
+  .metricLabel {
+    color: #a0aec0;
+  }
+}
+
+.metricValue {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #2d3748;
+  font-family: monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  .metricValue {
+    color: #e2e8f0;
+  }
+}
+
+.progressBar {
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+  .progressBar {
+    background: #4a5568;
+  }
+}
+
+.progressFill {
+  height: 100%;
+  background: #48bb78;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.warning {
+  background: #ed8936;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: #f7fafc;
+  border-radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .stat {
+    background: #1a202c;
+  }
+}
+
+.statIcon {
+  font-size: 1.5rem;
+}
+
+.statValue {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #2d3748;
+}
+
+@media (prefers-color-scheme: dark) {
+  .statValue {
+    color: #e2e8f0;
+  }
+}
+
+.statLabel {
+  font-size: 0.75rem;
+  color: #718096;
+}

@@ -1,0 +1,147 @@
+.container {
+  width: 100%;
+}
+
+.dropzone {
+  border: 2px dashed #cbd5e0;
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: #f7fafc;
+}
+
+.dropzone:hover {
+  border-color: #007bff;
+  background: #edf2f7;
+}
+
+.dragging {
+  border-color: #007bff;
+  background: #e6f2ff;
+  transform: scale(1.02);
+}
+
+@media (prefers-color-scheme: dark) {
+  .dropzone {
+    background: #1a202c;
+    border-color: #4a5568;
+  }
+  
+  .dropzone:hover {
+    background: #2d3748;
+  }
+  
+  .dragging {
+    background: #2c5282;
+  }
+}
+
+.fileInput {
+  display: none;
+}
+
+.dropzoneContent {
+  pointer-events: none;
+}
+
+.uploadIcon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.dropzoneText {
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: #2d3748;
+}
+
+@media (prefers-color-scheme: dark) {
+  .dropzoneText {
+    color: #e2e8f0;
+  }
+}
+
+.dropzoneHint {
+  font-size: 0.875rem;
+  color: #718096;
+}
+
+.uploadsList {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.uploadItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: #f7fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .uploadItem {
+    background: #2d3748;
+    border-color: #4a5568;
+  }
+}
+
+.statusIcon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.uploadInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.fileName {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progressBar {
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+  .progressBar {
+    background: #4a5568;
+  }
+}
+
+.progressFill {
+  height: 100%;
+  background: #007bff;
+  transition: width 0.3s ease;
+}
+
+.error {
+  display: block;
+  font-size: 0.75rem;
+  color: #e53e3e;
+  margin-top: 0.25rem;
+}
+
+.fileSize {
+  font-size: 0.75rem;
+  color: #718096;
+  flex-shrink: 0;
+}

@@ -1,0 +1,62 @@
+# Agent Configuration for Local Agent Studio
+# This file defines settings for the orchestrator, planner, and agent generator
+
+# Main Orchestrator Configuration
+orchestrator:
+  max_iterations: 6
+  token_budget: 50000
+  workflow_confidence_threshold: 0.7
+  timeout_seconds: 300
+  fallback_behavior: "graceful_degradation"
+
+# Planner Configuration
+planner:
+  max_tasks_per_request: 10
+  min_task_complexity: 1
+  max_task_complexity: 5
+  dependency_resolution_timeout: 30
+  enable_task_optimization: true
+
+# Agent Generator Configuration
+agent_generator:
+  max_concurrent_agents: 5
+  default_agent_max_steps: 4
+  default_agent_max_tokens: 2000
+  agent_timeout_seconds: 120
+  prompt_template_path: "config/templates/agent_prompts.yaml"
+  available_tools:
+    - "file_reader"
+    - "web_search"
+    - "calculator"
+    - "code_executor"
+    - "document_processor"
+    - "memory_retriever"
+    - "context_manager"
+
+# Context Manager Configuration
+context:
+  chunk_size: 1000
+  chunk_overlap: 100
+  max_file_size_mb: 100
+  supported_file_types:
+    - ".pdf"
+    - ".docx"
+    - ".xlsx"
+    - ".pptx"
+    - ".txt"
+    - ".md"
+    - ".png"
+    - ".jpg"
+    - ".jpeg"
+  ocr_enabled: true
+  ocr_language: "eng"
+  embedding_model: "text-embedding-3-small"
+  vector_db_path: "data/vector_db"
+  retrieval_k: 10
+  use_mmr: true
+
+# Global System Settings
+log_level: "INFO"
+debug_mode: false
+config_reload_enabled: true
+config_watch_interval: 5

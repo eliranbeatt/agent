@@ -1,0 +1,116 @@
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  background: #f7fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .container {
+    background: #2d3748;
+    border-color: #4a5568;
+  }
+}
+
+.statusBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.statusDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.idle {
+  background: #718096;
+  animation: none;
+}
+
+.running {
+  background: #48bb78;
+}
+
+.paused {
+  background: #ed8936;
+  animation: none;
+}
+
+.completed {
+  background: #4299e1;
+  animation: none;
+}
+
+.error {
+  background: #f56565;
+  animation: none;
+}
+
+.statusText {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+@media (prefers-color-scheme: dark) {
+  .statusText {
+    color: #e2e8f0;
+  }
+}
+
+.controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: white;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.pauseButton {
+  background: #ed8936;
+}
+
+.pauseButton:hover {
+  background: #dd6b20;
+}
+
+.resumeButton {
+  background: #48bb78;
+}
+
+.resumeButton:hover {
+  background: #38a169;
+}
+
+.stopButton {
+  background: #f56565;
+}
+
+.stopButton:hover {
+  background: #e53e3e;
+}

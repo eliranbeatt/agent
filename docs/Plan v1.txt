@@ -1,0 +1,351 @@
+Awesome—here’s a complete, pragmatic build plan for your local, hybrid multi-agent system with an orchestrator that can both run predefined workflows and dynamically spawn sub-agents on demand.
+
+# Product description (1-pager)
+
+**Name:** Local Agent Studio (LAS)
+**Goal:** A local, small-and-easy agent platform (OpenAI API key only) with **full control** over agent architecture, system prompts, workflows, iterations, and memory.
+**Core idea:**
+
+* A **Main Orchestrator** chooses between (a) *predefined workflows* and (b) *freeform, planner-driven execution* where an **Agent-Generator** spawns just-in-time sub-agents with tailored prompts/tools.
+* A **Context Manager** normalizes files (Office/PDF/images), builds context, and feeds it to tasks.
+* A lightweight **chat UI** for prompts, file uploads, and streaming responses.
+
+**Constraints you set:**
+
+* Runs **locally** (no cloud infra), minimal footprint.
+* File support now: **Office (Word/Excel/PowerPoint), PDFs, images**.
+* Start basic, but with a **global memory** that remembers profile, facts, new info, conversations, and summaries.
+* “Hybrid” execution: some **predefined workflows**, plus dynamic agents with freedom to act.
+
+---
+
+# Recommended open-source stack (keeps you in control)
+
+* **Orchestration / stateful agents:** **LangGraph** (open-source, Python/JS SDK; precise control over graph/state & agent loops). ([LangChain][1])
+
+  * Alternatives you can swap in later: **Microsoft AutoGen** (multi-agent collaboration) and **CrewAI** (lean, simple crews). ([GitHub][2])
+* **Docs & file ingestion:** **Unstructured** (robust OSS loaders for Office/PDF/images), plus LangChain loaders where convenient. ([GitHub][3])
+* **Vector DB (local):** **ChromaDB** or **LanceDB** (both embedded/local friendly). Start with ChromaDB; LanceDB is great as you scale. ([Chroma][4])
+* **Memory layer:** **Mem0** (OSS memory for agents; supports OpenAI). ([GitHub][5])
+* **Backend:** Python **FastAPI** (simple local API).
+* **UI:** **Next.js/React** minimal chat + file upload.
+* **Embeddings & LLM:** OpenAI (you supply API key, local run).
+* **OCR (for image PDFs):** Built into Unstructured via Tesseract/PyMuPDF routes; can add PaddleOCR later. ([Unstructured][6])
+
+> Why this stack? It’s all open source, runs locally, and gives you **fine-grained control** over graphs, state, prompts, tools, and memory. LangGraph in particular is strong for deterministic agent loops and guardrails, while Mem0 centralizes your long-lived memories.
+
+---
+
+# High-level architecture
+
+```
+[Chat UI (Next.js)]
+        │  prompts / files
+        ▼
+[FastAPI backend] ──▶ [Orchestrator (LangGraph)]
+                         │
+               ┌─────────┴─────────┐
+        [Planner]            [Task Identifier]
+               │                    │
+               └──────▶ [Agent Generator] ────▶ spawns specialized sub-agents
+                           │
+         [Context Manager & Tools Router]  ───▶ loaders (Unstructured/LangChain)
+                           │                     OCR / parsers / image utils
+                           │                     RAG: Chroma or LanceDB
+                      [Memory Manager (Mem0)]
+                           │
+                      [Evaluator/Verifier]
+                           │
+                      [Result Assembler]
+                           │
+                      response → UI
+```
+
+---
+
+# Core agents (minimal, composable)
+
+1. **Main Orchestrator (graph root)**
+
+   * Chooses **predefined workflow** vs **planner route**; supervises loops, max-steps, and tool budgets.
+2. **Planner**
+
+   * Breaks user request into ordered tasks with inputs/outputs; sets *success criteria*.
+3. **Task Identifier**
+
+   * Maps tasks to tools/context; flags which require sub-agents.
+4. **Agent-Generator**
+
+   * Given a task + context + previous outputs, **instantiates a new sub-agent** with a tailored system prompt, tools, and stop rules.
+5. **Context Manager / Tools Router**
+
+   * Ingestion (Office/PDF/images), chunking, embeddings, retrieval, tool selection.
+6. **Memory Manager**
+
+   * Global profile, facts, conversational memory, summaries (Mem0 + vector store).
+7. **Evaluator / Verifier**
+
+   * Lightweight self-check: task success, sources used, contradictions; can trigger replans.
+8. **Result Assembler**
+
+   * Collates outputs, citations, and summaries for UI.
+
+> Optional later: Web search agent, code-exec agent, UI-test agent. Keep v1 lean.
+
+---
+
+# Predefined workflows (starter set)
+
+* **RAG QA over uploads:** Ingest → Chunk → Embed → Retrieve → Answer → Verify.
+* **Summarize & Extract:** For Office/PDF/images (OCR), output bullet facts + JSON.
+* **Compare & Synthesize:** Given multiple files, produce comparison tables + key insights.
+* **Image-only → OCR → QA:** Extract text → answer questions with citations.
+
+The Orchestrator can always override and route through Planner + Agent-Generator for novel tasks.
+
+---
+
+# Memory design (what to remember)
+
+* **Global profile:** name, preferences, tone.
+* **Stable facts:** recurring details learned across sessions.
+* **New information:** incremental facts tagged with timestamp + source.
+* **Conversation history:** rolling window + **summaries** per topic.
+* **RAG traces:** what was retrieved & why (for future speed/quality).
+
+Use **Mem0** for long-term memory entries + **Chroma/LanceDB** for semantic recall. ([GitHub][5])
+
+---
+
+# Data & config (you have “full control”)
+
+**Everything is configuration-first** so you can edit YAML/JSON without code changes.
+
+**`/config/agents.yaml` (example)**
+
+```yaml
+orchestrator:
+  max_iters: 6
+  prefer_workflow: true   # try predefined flows first
+  fallback_to_planner: true
+
+planner:
+  model: "gpt-4.1"        # example; you’ll set actual model
+  output_contract: [tasks, dependencies, success_criteria]
+
+agent_generator:
+  template:
+    system: |
+      You are a specialized agent for task: {task_name}
+      Goal: {goal}
+      Tools: {tools}
+      Hard limits: {limits}
+      Required outputs: {outputs}
+    limits:
+      max_steps: 4
+      use_tools: true
+
+memory:
+  mem0:
+    collections: [profile, facts, convo, summaries]
+  vector:
+    db: "chroma"          # or "lancedb"
+    collection: "docs"
+    chunk_size: 1000
+    chunk_overlap: 150
+
+workflows:
+  rag_qa:
+    steps: [ingest, embed, retrieve, answer, verify]
+  summarize:
+    steps: [ingest, ocr_if_needed, summarize, verify]
+```
+
+---
+
+# File ingestion & RAG pipeline
+
+1. **Loaders**
+
+   * Office/PDF/images via **Unstructured**; fall back to LangChain loaders where convenient. ([GitHub][3])
+2. **Normalization**
+
+   * Split into semantic chunks (size 800–1,200 tokens; overlap 80–150).
+3. **Embeddings**
+
+   * OpenAI embeddings (local run, your API key).
+4. **Store**
+
+   * **ChromaDB** (embedded, simple) or **LanceDB** (scales nicely). ([Chroma][4])
+5. **Retrieval**
+
+   * k=8–12; MMR on; rerank optional.
+6. **Answering**
+
+   * Cite chunk IDs; Verifier checks claims.
+
+---
+
+# UI (basic but solid)
+
+* **Next.js** chat view: left panel (history), main chat, right panel (retrieved sources).
+* **File uploads:** drag-and-drop; progress; per-file ingestion status.
+* **Run mode toggle:** “Predefined Workflow” vs “Autonomous (Planner)”.
+* **Inspector:** show plan graph, spawned agents, tokens/steps, memory hits.
+
+---
+
+# Implementation plan (phased, minimal to robust)
+
+## Phase 0 — Bootstrap (½–1 day)
+
+* Skeleton repos: `/ui` (Next.js), `/server` (FastAPI + LangGraph), `/config`, `/data`.
+* Add `.env` for OpenAI key; local run via `uvicorn` + `next dev`.
+
+## Phase 1 — Core graph & control (2–3 days)
+
+* Define **LangGraph** nodes: Orchestrator, Planner, Task Identifier, Agent-Generator, Context Manager, Memory Manager, Evaluator, Result Assembler.
+* Implement **config-driven** agent templates & limits.
+* Unit tests: plan generation; agent spawning; step limits. ([LangChain][1])
+
+## Phase 2 — Ingestion & RAG (2–3 days)
+
+* Wire **Unstructured** + LangChain loaders; handle Office/PDF/images + OCR.
+* Add **ChromaDB** (or LanceDB) & embedding pipeline; ingestion CLI: `ingest <path>`. ([GitHub][3])
+* Retrieval endpoint; basic QA workflow; citations.
+
+## Phase 3 — Memory (1–2 days)
+
+* Integrate **Mem0** for global profile/facts/convo/summaries; add memory policies (TTL, size caps). ([GitHub][5])
+* “/memory” inspector in UI; allow user edits (delete/merge).
+
+## Phase 4 — Evaluator & Guardrails (1–2 days)
+
+* Implement verifier pass (check success criteria; ask for missing facts; optional replan).
+* Add max-iter/timebox/compute-budget controls per agent.
+
+## Phase 5 — UI polish (1–2 days)
+
+* Streaming tokens, file status, sources panel, graph visual (DAG of steps).
+* Toggle: Predefined vs Autonomous; show spawned agents with summaries.
+
+**Total v1:** ~8–12 working days (solo pace). You can compress if reusing templates.
+
+---
+
+# Testing & acceptance
+
+* **Unit:** Planner output schema; Agent-Generator creates correct prompts; tools called with right args.
+* **Integration:** End-to-end RAG QA on sample PDFs; ingestion + retrieval + verified answer.
+* **UX smoke:** Upload Office/PDF/images; ask questions; switch run modes.
+* **Acceptance (v1):**
+
+  1. Run locally with your OpenAI key.
+  2. Answer questions over uploaded docs with citations.
+  3. Spawn at least one dynamic sub-agent during autonomous runs.
+  4. Persist & surface global memory.
+
+---
+
+# Prompts (starter templates)
+
+**Orchestrator (system)**
+
+```
+You are the Orchestrator. Choose between a predefined workflow or a planner-driven route.
+Respect limits: {max_iters}, {max_tokens}, {tool_budget}.
+If predefined flow matches intent with ≥0.7 confidence, use it; else call the Planner.
+Stop when success_criteria are met or limits are hit.
+Always record: chosen_path, steps, tools_used, memory_hits.
+```
+
+**Planner (system)**
+
+```
+Decompose the user goal into minimal tasks with dependencies.
+For each task include: name, inputs, expected_output, success_criteria.
+Prefer using available context and tools; otherwise ask Context Manager to fetch/prepare it.
+Output strictly as JSON {tasks:[], dependencies:[], success_criteria:[]}.
+```
+
+**Agent-Generator (system)**
+
+```
+Create a specialized agent for {task_name}.
+Draft a concise system prompt with: role, goal, allowed tools, hard limits, required outputs, stop conditions.
+Return a runnable spec: {prompt, tools[], limits, output_contract}.
+```
+
+**Evaluator (system)**
+
+```
+Check that outputs meet success_criteria, are grounded in retrieved sources, and contain no contradictions.
+If failed, propose a minimal replan step or request missing context.
+```
+
+---
+
+# Folder structure
+
+```
+local-agent-studio/
+  ui/                 # Next.js
+  server/             # FastAPI + LangGraph graph
+    graph/            # nodes: orchestrator, planner, agent_generator, ...
+    tools/            # loaders, OCR, RAG, file ops
+    memory/           # mem0 integration + vector store client
+  config/             # agents.yaml, workflows.yaml
+  data/               # local DBs (Chroma/LanceDB), uploads
+  tests/
+```
+
+---
+
+# Risks & mitigations
+
+* **Tool sprawl / complexity:** Keep v1 to the listed agents; add others via config only after tests pass.
+* **Parser fragility (Office/PDF):** Use Unstructured fallbacks and OCR; log parse errors with file pointers. ([Unstructured][6])
+* **Hallucinations:** Always pass retrieved chunks; enforce verifier step + citations.
+* **State explosions / loops:** Hard caps on steps/tokens; LangGraph loop guards. ([LangChain][1])
+
+---
+
+# Roadmap (after v1)
+
+* Add **AutoGen** or **CrewAI** variants for research/benchmarking different runtimes. ([Microsoft GitHub][7])
+* Tooling: web search, code executor (sandboxed), table extraction, reranking.
+* Multi-tenant memory profiles; role-based presets.
+* Export/import of workflows; UI to edit YAML live.
+* Optional: **Microsoft Agent Framework** (new OSS combining SK + AutoGen). ([Microsoft for Developers][8])
+
+---
+
+# Why these choices (quick references)
+
+* **LangGraph** = stateful, graph-based control for agents/workflows. ([LangChain][1])
+* **AutoGen / CrewAI** = proven multi-agent frameworks if you want alternates. ([GitHub][2])
+* **Unstructured** = best-in-class OSS ingestion for Office/PDF/images + OCR. ([GitHub][3])
+* **Chroma / LanceDB** = embedded vector stores that run locally. ([Chroma][4])
+* **Mem0** = open-source long-term memory for agents. ([GitHub][5])
+
+---
+
+## Final notes tailored to your bullets
+
+1. **Hybrid**: you get both **predefined workflows** and **autonomous orchestration**.
+2. **Office/PDF/images**: covered by Unstructured + OCR; RAG enabled.
+3. **Local, small & easy**: FastAPI + embedded DBs; no external services needed beyond OpenAI API.
+4. **“All 4”**: covered via the 4 pillars—planner, generator, context, memory (plus orchestrator & verifier).
+5. **Start basic**: the phased plan gets you a working v1 fast.
+6. **Global profile + memories**: Mem0 + vector store; editor UI to view/trim.
+
+If you want, I can turn this into a repo scaffold (folders, configs, example nodes, and a minimal UI page) and a “getting started” README next.
+
+[1]: https://www.langchain.com/langgraph?utm_source=chatgpt.com "LangGraph"
+[2]: https://github.com/microsoft/autogen?utm_source=chatgpt.com "microsoft/autogen: A programming framework for agentic AI"
+[3]: https://github.com/Unstructured-IO/unstructured?utm_source=chatgpt.com "Unstructured-IO/unstructured"
+[4]: https://www.trychroma.com/?utm_source=chatgpt.com "Chroma"
+[5]: https://github.com/mem0ai/mem0?utm_source=chatgpt.com "mem0ai/mem0: Universal memory layer for AI Agents; ..."
+[6]: https://docs.unstructured.io/open-source/introduction/overview?utm_source=chatgpt.com "Overview"
+[7]: https://microsoft.github.io/autogen/stable//index.html?utm_source=chatgpt.com "AutoGen"
+[8]: https://devblogs.microsoft.com/foundry/introducing-microsoft-agent-framework-the-open-source-engine-for-agentic-ai-apps/?utm_source=chatgpt.com "The Open-Source Engine for Agentic AI Apps"

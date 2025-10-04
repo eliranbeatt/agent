@@ -1,0 +1,221 @@
+# Predefined Workflows Configuration for Local Agent Studio
+# This file defines the built-in workflows for common tasks
+
+workflows:
+  # RAG Question Answering Workflow
+  rag_qa:
+    name: "RAG Question Answering"
+    description: "Answer questions based on uploaded documents using retrieval-augmented generation"
+    confidence_threshold: 0.8
+    enabled: true
+    triggers:
+      - "question about document"
+      - "what does the document say"
+      - "find information in"
+      - "search for"
+      - "explain from document"
+    steps:
+      - name: "context_retrieval"
+        description: "Retrieve relevant document chunks for the question"
+        node_type: "context_manager"
+        parameters:
+          retrieval_k: 10
+          use_mmr: true
+          similarity_threshold: 0.7
+        success_criteria:
+          - "Retrieved at least 3 relevant chunks"
+          - "Chunks have similarity score > 0.7"
+      - name: "answer_generation"
+        description: "Generate answer based on retrieved context"
+        node_type: "llm_generator"
+        parameters:
+          max_tokens: 1000
+          temperature: 0.1
+          include_citations: true
+        success_criteria:
+          - "Answer is grounded in retrieved context"
+          - "Citations are properly formatted"
+          - "Answer addresses the original question"
+      - name: "answer_verification"
+        description: "Verify answer quality and source grounding"
+        node_type: "evaluator"
+        parameters:
+          check_grounding: true
+          check_contradictions: true
+          min_quality_score: 0.7
+        success_criteria:
+          - "Answer is factually grounded"
+          - "No contradictions detected"
+          - "Quality score >= 0.7"
+    success_criteria:
+      - "Question answered with proper citations"
+      - "Answer verified for accuracy"
+      - "Sources properly attributed"
+
+  # Document Summarization and Extraction Workflow
+  summarize_extract:
+    name: "Summarize & Extract"
+    description: "Summarize documents and extract key facts, entities, and insights"
+    confidence_threshold: 0.75
+    enabled: true
+    triggers:
+      - "summarize document"
+      - "extract key points"
+      - "what are the main ideas"
+      - "give me a summary"
+      - "extract facts from"
+    steps:
+      - name: "document_chunking"
+        description: "Process and chunk the entire document"
+        node_type: "context_manager"
+        parameters:
+          chunk_size: 1500
+          chunk_overlap: 150
+          preserve_structure: true
+        success_criteria:
+          - "Document fully processed"
+          - "Chunks maintain logical structure"
+      - name: "content_analysis"
+        description: "Analyze each chunk for key information"
+        node_type: "analyzer"
+        parameters:
+          extract_entities: true
+          extract_facts: true
+          identify_themes: true
+        success_criteria:
+          - "Key entities identified"
+          - "Important facts extracted"
+          - "Main themes identified"
+      - name: "summary_generation"
+        description: "Generate comprehensive summary"
+        node_type: "summarizer"
+        parameters:
+          summary_length: "medium"
+          include_key_points: true
+          include_statistics: true
+        success_criteria:
+          - "Summary covers main points"
+          - "Key statistics included"
+          - "Appropriate length maintained"
+      - name: "fact_extraction"
+        description: "Extract and structure key facts"
+        node_type: "fact_extractor"
+        parameters:
+          fact_types: ["dates", "numbers", "names", "locations", "claims"]
+          confidence_threshold: 0.8
+        success_criteria:
+          - "Facts properly categorized"
+          - "High confidence facts identified"
+          - "Sources tracked for each fact"
+    success_criteria:
+      - "Comprehensive summary generated"
+      - "Key facts extracted and categorized"
+      - "Insights and themes identified"
+
+  # Multi-Document Comparison and Synthesis
+  compare_synthesize:
+    name: "Compare & Synthesize"
+    description: "Compare multiple documents and synthesize insights across sources"
+    confidence_threshold: 0.7
+    enabled: true
+    triggers:
+      - "compare documents"
+      - "find differences between"
+      - "synthesize information from"
+      - "what do these documents say about"
+      - "cross-reference"
+    steps:
+      - name: "multi_doc_processing"
+        description: "Process and index all documents"
+        node_type: "context_manager"
+        parameters:
+          maintain_source_separation: true
+          cross_document_linking: true
+        success_criteria:
+          - "All documents processed"
+          - "Source attribution maintained"
+          - "Cross-references identified"
+      - name: "comparative_analysis"
+        description: "Identify similarities and differences"
+        node_type: "comparator"
+        parameters:
+          comparison_dimensions: ["content", "conclusions", "data", "methodology"]
+          highlight_conflicts: true
+        success_criteria:
+          - "Key similarities identified"
+          - "Important differences highlighted"
+          - "Conflicts flagged for review"
+      - name: "synthesis_generation"
+        description: "Synthesize insights across documents"
+        node_type: "synthesizer"
+        parameters:
+          synthesis_approach: "comprehensive"
+          resolve_conflicts: true
+          weight_by_source_quality: true
+        success_criteria:
+          - "Coherent synthesis produced"
+          - "Conflicts addressed or noted"
+          - "Sources properly weighted"
+    success_criteria:
+      - "Documents successfully compared"
+      - "Key insights synthesized"
+      - "Conflicts identified and addressed"
+
+  # Image OCR and Question Answering
+  image_ocr_qa:
+    name: "Image OCR → QA"
+    description: "Extract text from images using OCR and answer questions about the content"
+    confidence_threshold: 0.8
+    enabled: true
+    triggers:
+      - "read text from image"
+      - "what does this image say"
+      - "extract text from"
+      - "ocr this image"
+      - "question about image text"
+    steps:
+      - name: "image_preprocessing"
+        description: "Prepare image for OCR processing"
+        node_type: "image_processor"
+        parameters:
+          enhance_contrast: true
+          denoise: true
+          deskew: true
+        success_criteria:
+          - "Image quality improved"
+          - "Text regions identified"
+      - name: "ocr_extraction"
+        description: "Extract text using OCR"
+        node_type: "ocr_engine"
+        parameters:
+          engine: "tesseract"
+          language: "eng"
+          confidence_threshold: 0.6
+        success_criteria:
+          - "Text successfully extracted"
+          - "OCR confidence > 0.6"
+          - "Text structure preserved"
+      - name: "text_processing"
+        description: "Clean and structure extracted text"
+        node_type: "text_processor"
+        parameters:
+          clean_artifacts: true
+          preserve_formatting: true
+          chunk_for_qa: true
+        success_criteria:
+          - "Text cleaned and structured"
+          - "Ready for question answering"
+      - name: "qa_processing"
+        description: "Answer questions about extracted text"
+        node_type: "qa_engine"
+        parameters:
+          use_extracted_text: true
+          include_ocr_confidence: true
+        success_criteria:
+          - "Questions answered accurately"
+          - "OCR confidence reported"
+          - "Text sources cited"
+    success_criteria:
+      - "Text successfully extracted from image"
+      - "Questions answered based on extracted content"
+      - "OCR quality and confidence reported"
