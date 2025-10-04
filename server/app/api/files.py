@@ -16,8 +16,8 @@ router = APIRouter(prefix="/files", tags=["files"])
 # Initialize components
 config_loader = ConfigLoader()
 config = config_loader.load_config()
-file_processor = FileProcessor()
-context_manager = ContextManager(config.context)
+file_processor = FileProcessor(config)
+context_manager = ContextManager(config)
 
 # In-memory storage for file processing status (should be replaced with proper storage)
 file_status_store: Dict[str, FileProcessingStatus] = {}

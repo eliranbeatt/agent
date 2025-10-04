@@ -1,0 +1,102 @@
+{
+  "session_id": "test-session",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Test message",
+      "timestamp": "2025-10-04T08:25:12.756814",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Test response",
+      "timestamp": "2025-10-04T08:25:12.757151",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "user",
+      "content": "Test message",
+      "timestamp": "2025-10-04T08:27:50.902108",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Test response",
+      "timestamp": "2025-10-04T08:27:50.909090",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "user",
+      "content": "Test message",
+      "timestamp": "2025-10-04T08:30:09.900933",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Test response",
+      "timestamp": "2025-10-04T08:30:09.909392",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "user",
+      "content": "Test message",
+      "timestamp": "2025-10-04T08:34:44.202418",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Test response",
+      "timestamp": "2025-10-04T08:34:44.211820",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "user",
+      "content": "Test message",
+      "timestamp": "2025-10-04T08:36:44.501007",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Test response",
+      "timestamp": "2025-10-04T08:36:44.509790",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "user",
+      "content": "Test message",
+      "timestamp": "2025-10-04T08:38:51.345797",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Test response",
+      "timestamp": "2025-10-04T08:38:51.353394",
+      "metadata": {
+        "test": true
+      }
+    }
+  ],
+  "updated_at": "2025-10-04T08:38:51.353415"
+}

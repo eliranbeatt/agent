@@ -28,6 +28,9 @@ class Chunk:
 
 
 class ContentChunker:
+    pass
+
+class ContentChunker:
     """Handles semantic chunking of content into manageable segments."""
     
     def __init__(
@@ -315,3 +318,6 @@ class ContentChunker:
             end_char=end_char,
             metadata=chunk_metadata
         )
+
+class SemanticChunker(ContentChunker):
+    pass

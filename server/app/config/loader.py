@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import threading
 import time
 from pathlib import Path
@@ -50,7 +51,7 @@ class ConfigFileHandler(FileSystemEventHandler):
 class ConfigLoader:
     """Configuration loader with validation and hot-reload capabilities."""
     
-    def __init__(self, config_dir: Path = Path("config")):
+    def __init__(self, config_dir: Path = Path("C:/Users/elira/Dev/agent/config")):
         self.config_dir = Path(config_dir)
         self.config: Optional[SystemConfig] = None
         self.watched_files: set = set()
@@ -160,35 +161,50 @@ class ConfigLoader:
             try:
                 orchestrator = OrchestratorConfig(**orchestrator_data)
             except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid orchestrator configuration: {e}")
+                # Extract field name from error message if possible
+                field_match = re.search(r"'(\w+)'", str(e))
+                field = f" on field '{field_match.group(1)}'" if field_match else ""
+                raise ValueError(f"Invalid orchestrator configuration{field}: {e}")
             
             # Extract planner config
             planner_data = config_data.get('planner', {})
             try:
                 planner = PlannerConfig(**planner_data)
             except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid planner configuration: {e}")
+                # Extract field name from error message if possible
+                field_match = re.search(r"'(\w+)'", str(e))
+                field = f" on field '{field_match.group(1)}'" if field_match else ""
+                raise ValueError(f"Invalid planner configuration{field}: {e}")
             
             # Extract agent generator config
             agent_generator_data = config_data.get('agent_generator', {})
             try:
                 agent_generator = AgentGeneratorConfig(**agent_generator_data)
             except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid agent_generator configuration: {e}")
+                # Extract field name from error message if possible
+                field_match = re.search(r"'(\w+)'", str(e))
+                field = f" on field '{field_match.group(1)}'" if field_match else ""
+                raise ValueError(f"Invalid agent_generator configuration{field}: {e}")
             
             # Extract context config
             context_data = config_data.get('context', {})
             try:
                 context = ContextConfig(**context_data)
             except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid context configuration: {e}")
+                # Extract field name from error message if possible
+                field_match = re.search(r"'(\w+)'", str(e))
+                field = f" on field '{field_match.group(1)}'" if field_match else ""
+                raise ValueError(f"Invalid context configuration{field}: {e}")
             
             # Extract memory config
             memory_data = config_data.get('memory', {})
             try:
                 memory = MemoryConfig(**memory_data)
             except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid memory configuration: {e}")
+                # Extract field name from error message if possible
+                field_match = re.search(r"'(\w+)'", str(e))
+                field = f" on field '{field_match.group(1)}'" if field_match else ""
+                raise ValueError(f"Invalid memory configuration{field}: {e}")
             
             # Extract workflows
             workflows = {}

@@ -131,7 +131,7 @@ class TaskDecomposer:
             config: System configuration
         """
         self.config = config
-        self.max_tasks = config.planner.max_tasks_per_request
+        self.max_tasks = config.planner.max_tasks
         
         # Enhanced decomposition patterns for better task identification
         self.decomposition_patterns = {

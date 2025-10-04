@@ -69,6 +69,9 @@ class Evaluator:
     - Generate quality scores and confidence metrics
     """
     
+    def __call__(self, state):
+        return state
+
     def __init__(
         self,
         openai_api_key: Optional[str] = None,

@@ -11,7 +11,7 @@ orchestrator:
 
 # Planner Configuration
 planner:
-  max_tasks_per_request: 10
+  max_tasks: 10
   min_task_complexity: 1
   max_task_complexity: 5
   dependency_resolution_timeout: 30

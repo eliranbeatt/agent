@@ -559,11 +559,47 @@ class MemoryManager:
             metadata=metadata or {},
         )
 
-    def get_conversation_window(
+    def store_conversation(
         self,
         session_id: str,
-        window_size: Optional[int] = None,
-    ) -> List[Message]:
+        user_message: str,
+        assistant_message: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Store a conversation turn.
+
+        Args:
+            session_id: Session ID
+            user_message: User's message
+            assistant_message: Assistant's message
+            metadata: Additional metadata
+        """
+        self.add_conversation_message(
+            session_id=session_id,
+            role="user",
+            content=user_message,
+            metadata=metadata,
+        )
+        self.add_conversation_message(
+            session_id=session_id,
+            role="assistant",
+            content=assistant_message,
+            metadata=metadata,
+        )
+
+    def get_conversation_history(self, session_id: str) -> List[Message]:
+        """
+        Get the full conversation history for a session.
+
+        Args:
+            session_id: The ID of the session.
+
+        Returns:
+            A list of messages in the conversation.
+        """
+        return self.conversation_manager.get_full_history(session_id)
+
         """
         Get rolling window of recent conversation messages.
 

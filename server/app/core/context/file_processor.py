@@ -40,7 +40,12 @@ class FileType(Enum):
     PPT = "ppt"
     IMAGE = "image"
     TEXT = "text"
+    MD = "md"
+    PNG = "png"
     UNKNOWN = "unknown"
+
+    def __str__(self):
+        return self.value
 
 
 @dataclass
@@ -53,6 +58,8 @@ class ProcessingResult:
     file_type: Optional[FileType] = None
     page_count: Optional[int] = None
 
+
+from ...config.models import SystemConfig
 
 class FileProcessor:
     """Handles file ingestion and content extraction for various document types."""
@@ -73,6 +80,7 @@ class FileProcessor:
             '.jpeg': FileType.IMAGE,
             '.tiff': FileType.IMAGE,
             '.bmp': FileType.IMAGE,
+            '.md': FileType.TEXT,
         }
         
         # Configure Tesseract if available
@@ -101,6 +109,8 @@ class FileProcessor:
         
         # First try extension-based detection
         extension = file_path.suffix.lower()
+        if extension == '.txt':
+            return FileType.TEXT
         if extension in self.supported_extensions:
             return self.supported_extensions[extension]
         
