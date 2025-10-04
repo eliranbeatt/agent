@@ -32,7 +32,7 @@ class OrchestratorConfig:
 @dataclass
 class PlannerConfig:
     """Configuration for the Planner component."""
-    max_tasks_per_request: int = 10
+    max_tasks: int = 10
     min_task_complexity: int = 1
     max_task_complexity: int = 5
     dependency_resolution_timeout: int = 30
@@ -40,8 +40,8 @@ class PlannerConfig:
     
     def __post_init__(self):
         """Validate PlannerConfig fields after initialization."""
-        if self.max_tasks_per_request <= 0:
-            raise ValueError(f"max_tasks_per_request must be positive, got {self.max_tasks_per_request}")
+        if self.max_tasks <= 0:
+            raise ValueError(f"max_tasks must be positive, got {self.max_tasks}")
         if self.min_task_complexity < 1:
             raise ValueError(f"min_task_complexity must be >= 1, got {self.min_task_complexity}")
         if self.max_task_complexity < self.min_task_complexity:

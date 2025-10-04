@@ -2,13 +2,7 @@
 
 ## Phase 1: Critical Fixes (HIGH PRIORITY)
 
-- [-] 1. Fix Configuration System
-
-
-
-
-
-
+- [x] 1. Fix Configuration System
   - Fix configuration schema mismatches between YAML and dataclasses
   - Update field names to be consistent
   - Add schema validation with clear error messages
@@ -17,33 +11,31 @@
 
 
 
-  - [ ] 1.1 Audit and fix PlannerConfig dataclass
+  - [x] 1.1 Audit and fix PlannerConfig dataclass
     - Review `server/app/config/models.py` PlannerConfig fields
     - Match field names to `config/agents.yaml` planner section
     - Update `max_tasks_per_request` to `max_tasks` or vice versa
     - Add field validation and defaults
-
-
     - _Requirements: 1.1, 1.2_
 
-  - [ ] 1.2 Audit and fix all other config dataclasses
+  - [x] 1.2 Audit and fix all other config dataclasses
     - Review OrchestratorConfig, AgentGeneratorConfig, ContextConfig, MemoryConfig
     - Ensure all fields match YAML configuration
-
-
     - Add missing fields from YAML
     - Remove unused fields from dataclasses
     - _Requirements: 1.1, 1.2_
 
-  - [-] 1.3 Add configuration validation
-
+  - [x] 1.3 Add configuration validation
     - Implement schema validation in config loader
     - Add type checking for all fields
     - Add range validation for numeric fields
     - Provide clear error messages with file/line numbers
     - _Requirements: 1.3, 1.4_
 
-  - [ ] 1.4 Test configuration loading
+  - [x] 1.4 Test configuration loading
+
+
+
     - Test with valid configuration
     - Test with invalid configuration
     - Test with missing fields
