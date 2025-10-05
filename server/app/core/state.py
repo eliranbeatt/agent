@@ -253,4 +253,9 @@ class ExecutionState:
             "next_node": self.next_node,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "context": self.context,
+            "retrieved_chunks": self.retrieved_chunks,
+            "memory_hits": self.memory_hits,
+            "final_result": self.final_result,
+            "error_message": self.error_message,
         }

@@ -262,6 +262,13 @@ class TestExecutionState:
         task = Task(name="test_task")
         state.add_task(task)
         
+        state.context["extra"] = "value"
+        state.retrieved_chunks = [{"id": "chunk-1"}]
+        state.memory_hits = [{"id": "memory-1"}]
+        final_result = {"response": "Test response"}
+        state.complete_execution(final_result)
+        state.error_message = "test-error"
+        
         # Serialize to dict
         state_dict = state.to_dict()
         
@@ -273,6 +280,11 @@ class TestExecutionState:
         assert len(state_dict["tasks"]) == 1
         assert state_dict["tasks"][0]["name"] == "test_task"
         assert state_dict["started_at"] is not None
+        assert state_dict["context"]["extra"] == "value"
+        assert state_dict["retrieved_chunks"] == [{"id": "chunk-1"}]
+        assert state_dict["memory_hits"] == [{"id": "memory-1"}]
+        assert state_dict["final_result"] == final_result
+        assert state_dict["error_message"] == "test-error"
 
 
 class TestTask:

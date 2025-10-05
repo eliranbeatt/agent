@@ -1,0 +1,29 @@
+# Environment configuration
+.env
+.env.local
+.env.*
+!.env.example
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Test caches
+.pytest_cache/
+
+# Virtual environments
+venv/
+server/venv/
+
+# Node / Next.js build output
+ui/node_modules/
+ui/.next/
+
+# Local data stores and uploads
+server/data/**/*.sqlite3
+server/data/**/*.bin
+server/data/memory/conversations/
+server/server/data/uploads/
+
