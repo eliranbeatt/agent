@@ -28,6 +28,7 @@ Provides-Extra: dev
 Requires-Dist: pytest>=8.3.0; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
 Requires-Dist: httpx>=0.27.0; extra == "dev"
+Requires-Dist: pytest-playwright>=0.4.0; extra == "dev"
 
 ﻿# Local Agent Studio Server
 

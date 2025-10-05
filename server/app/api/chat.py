@@ -68,13 +68,13 @@ async def generate_streaming_response(
         for step_output in execution_graph.stream(execution_state, config):
             # Extract node name and state
             node_name = list(step_output.keys())[0]
-            state = step_output[node_name]
+            state_dict = step_output[node_name]
             
             # Stream progress update
             progress_data = {
                 "type": "progress",
                 "node": node_name,
-                "step": state.current_step,
+                "step": state_dict.get("current_step", 0),
                 "session_id": session_id
             }
             yield f"data: {json.dumps(progress_data)}\n\n"
