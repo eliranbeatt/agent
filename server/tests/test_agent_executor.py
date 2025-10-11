@@ -1,5 +1,6 @@
 """Tests for Agent Executor functionality."""
 
+import os
 import pytest
 import time
 from datetime import datetime, timedelta
@@ -11,6 +12,13 @@ from app.core.agent_executor import (
 )
 from app.core.state import ExecutionState, Task, AgentSpec, AgentLimits, TaskStatus
 from app.config.models import SystemConfig, AgentGeneratorConfig
+
+
+OPENAI_REQUIRED = pytest.mark.skipif(
+    not os.getenv("OPENAI_API_KEY"),
+    reason="OpenAI API key not set",
+)
+
 
 
 @pytest.fixture
@@ -83,6 +91,7 @@ def execution_state(sample_task, sample_agent_spec):
 class TestSubAgentRunner:
     """Test the SubAgentRunner class."""
     
+    @OPENAI_REQUIRED
     def test_execute_agent_success(self, system_config, sample_agent_spec, sample_task):
         """Test successful agent execution."""
         runner = SubAgentRunner(system_config)
@@ -97,6 +106,7 @@ class TestSubAgentRunner:
         assert "status" in result.result
         assert "execution_summary" in result.result
     
+    @OPENAI_REQUIRED
     def test_execute_agent_with_output_contract(self, system_config, sample_task):
         """Test agent execution with specific output contract."""
         agent_spec = AgentSpec(
@@ -123,6 +133,7 @@ class TestSubAgentRunner:
 class TestAgentLifecycleManager:
     """Test the AgentLifecycleManager class."""
     
+    @OPENAI_REQUIRED
     def test_instantiate_agent(self, system_config, sample_agent_spec, sample_task):
         """Test agent instantiation."""
         manager = AgentLifecycleManager(system_config)
@@ -144,6 +155,7 @@ class TestAgentLifecycleManager:
         finally:
             manager.stop_monitoring()
     
+    @OPENAI_REQUIRED
     def test_cancel_agent(self, system_config, sample_agent_spec, sample_task):
         """Test agent cancellation."""
         manager = AgentLifecycleManager(system_config)
@@ -165,6 +177,7 @@ class TestAgentLifecycleManager:
         finally:
             manager.stop_monitoring()
     
+    @OPENAI_REQUIRED
     def test_max_concurrent_agents(self, system_config, sample_agent_spec, sample_task):
         """Test maximum concurrent agents limit."""
         # Set low limit for testing
@@ -269,6 +282,7 @@ class TestResultCollector:
 class TestAgentExecutor:
     """Test the AgentExecutor class."""
     
+    @OPENAI_REQUIRED
     def test_execute_with_agents(self, system_config, execution_state):
         """Test agent executor with valid agents."""
         executor = AgentExecutor(system_config)

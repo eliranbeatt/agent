@@ -1,14 +1,19 @@
 """Sub-agent execution framework for Local Agent Studio."""
 
+import json
 import logging
-import asyncio
-from typing import Dict, Any, Optional, List, Callable
-from datetime import datetime, timedelta
-from dataclasses import dataclass, field
-from enum import Enum
-import uuid
+import os
 import threading
 import time
+import uuid
+
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
+import openai
+from openai import OpenAI
 
 from ..config.models import SystemConfig
 from .base_nodes import ProcessingNode
@@ -59,28 +64,50 @@ class RunningAgent:
     result_future: Optional[Any] = None
 
 
+
 class SubAgentRunner:
     """Handles the actual execution of individual sub-agents."""
-    
+
     def __init__(self, config: SystemConfig):
         """
         Initialize sub-agent runner.
-        
+
         Args:
             config: System configuration
         """
         self.config = config
         self.logger = logging.getLogger(f"{__name__}.SubAgentRunner")
-        
+        self.api_key = config.openai_api_key or os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise RuntimeError(
+                "OpenAI API key is required for agent execution. "
+                "Set OPENAI_API_KEY in your environment or system configuration."
+            )
+        try:
+            self.client = OpenAI(api_key=self.api_key)
+        except Exception as exc:
+            self.logger.error("Failed to initialize OpenAI client: %s", exc)
+            raise
+
+        self.default_model = (
+            os.getenv("OPENAI_AGENT_MODEL")
+            or os.getenv("OPENAI_MODEL")
+            or "gpt-4o-mini"
+        )
+        try:
+            self.default_temperature = float(os.getenv("OPENAI_AGENT_TEMPERATURE", "0.2"))
+        except ValueError:
+            self.default_temperature = 0.2
+
     def execute_agent(self, agent_spec: AgentSpec, task: Task, context: Dict[str, Any]) -> AgentExecutionResult:
         """
         Execute a single sub-agent.
-        
+
         Args:
             agent_spec: Agent specification
             task: Task to execute
             context: Execution context
-            
+
         Returns:
             Agent execution result
         """
@@ -91,110 +118,369 @@ class SubAgentRunner:
             status=AgentExecutionStatus.RUNNING,
             started_at=start_time
         )
-        
+
         try:
-            self.logger.info(f"Starting execution of agent {agent_spec.id} for task {task.id}")
-            
-            # Simulate agent execution (in real implementation, this would interface with LangChain/LangGraph)
-            execution_result = self._simulate_agent_execution(agent_spec, task, context)
-            
-            # Process the result
-            result.result = execution_result
+            agent_output, usage_metadata = self._run_openai_agent(agent_spec, task, context)
+
+            result.result = agent_output
             result.status = AgentExecutionStatus.COMPLETED
             result.completed_at = datetime.now()
             result.execution_time = (result.completed_at - start_time).total_seconds()
-            
-            self.logger.info(f"Agent {agent_spec.id} completed successfully in {result.execution_time:.2f}s")
-            
+
+            total_tokens = usage_metadata.get("total_tokens")
+            if total_tokens:
+                result.tokens_used = total_tokens
+            else:
+                prompt_tokens = usage_metadata.get("prompt_tokens") or 0
+                completion_tokens = usage_metadata.get("completion_tokens") or 0
+                result.tokens_used = prompt_tokens + completion_tokens
+
+            result.steps_taken = self._estimate_steps(agent_output)
+
+            log_entry = {
+                "event": "agent_completion",
+                "model": usage_metadata.get("model"),
+                "finish_reason": usage_metadata.get("finish_reason"),
+                "prompt_tokens": usage_metadata.get("prompt_tokens"),
+                "completion_tokens": usage_metadata.get("completion_tokens"),
+                "timestamp": result.completed_at.isoformat(),
+            }
+            raw_preview = usage_metadata.get("raw_response")
+            if raw_preview:
+                log_entry["raw_response_preview"] = self._truncate_text(raw_preview, 500)
+            result.execution_log.append(log_entry)
+
+            self.logger.info(
+                "Agent %s completed successfully in %.2fs (model=%s, tokens=%s)",
+                agent_spec.id,
+                result.execution_time,
+                usage_metadata.get("model"),
+                result.tokens_used,
+            )
+
         except TimeoutError:
             result.status = AgentExecutionStatus.TIMEOUT
             result.error = f"Agent execution timed out after {agent_spec.limits.timeout_seconds}s"
             result.completed_at = datetime.now()
             result.execution_time = (result.completed_at - start_time).total_seconds()
-            self.logger.warning(f"Agent {agent_spec.id} timed out")
-            
-        except Exception as e:
+            self.logger.warning("Agent %s timed out", agent_spec.id)
+
+        except Exception as exc:
             result.status = AgentExecutionStatus.FAILED
-            result.error = str(e)
+            result.error = str(exc)
             result.completed_at = datetime.now()
             result.execution_time = (result.completed_at - start_time).total_seconds()
-            self.logger.error(f"Agent {agent_spec.id} failed: {e}", exc_info=True)
-            
+            self.logger.error("Agent %s failed: %s", agent_spec.id, exc, exc_info=True)
+
         return result
-    
-    def _simulate_agent_execution(self, agent_spec: AgentSpec, task: Task, context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Simulate agent execution (placeholder for actual LangChain integration).
-        
-        Args:
-            agent_spec: Agent specification
-            task: Task to execute
-            context: Execution context
-            
-        Returns:
-            Execution result
-        """
-        # This is a simulation - in real implementation, this would:
-        # 1. Create a LangChain agent with the system prompt
-        # 2. Provide the agent with the specified tools
-        # 3. Execute the agent within the specified limits
-        # 4. Collect and return the results
-        
-        # Simulate some processing time
-        import time
-        time.sleep(0.1)  # Simulate work
-        
-        # Create a mock result based on the output contract
-        output_contract = agent_spec.output_contract
-        required_fields = output_contract.get("required_fields", [])
-        
-        mock_result = {
-            "status": "completed",
-            "execution_summary": f"Successfully executed {task.name}",
+
+    def _run_openai_agent(self, agent_spec: AgentSpec, task: Task, context: Dict[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        """Invoke OpenAI to execute the agent task."""
+        messages, required_fields = self._build_messages(agent_spec, task, context)
+        model_name = self._select_model(agent_spec, context)
+        max_tokens = self._determine_max_tokens(agent_spec)
+        timeout_seconds = max(agent_spec.limits.timeout_seconds, 5)
+
+        self.logger.debug(
+            "Executing agent %s with model %s (max_tokens=%s, timeout=%ss)",
+            agent_spec.id,
+            model_name,
+            max_tokens,
+            timeout_seconds,
+        )
+
+        try:
+            response = self.client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=self.default_temperature,
+                max_tokens=max_tokens,
+                response_format={"type": "json_object"},
+                timeout=timeout_seconds,
+            )
+        except Exception as exc:
+            if hasattr(openai, "APITimeoutError") and isinstance(exc, openai.APITimeoutError):
+                raise TimeoutError(str(exc)) from exc
+            raise
+
+        usage = getattr(response, "usage", None)
+        choice = response.choices[0] if getattr(response, "choices", None) else None
+        raw_content = choice.message.content if choice else "{}"
+        finish_reason = getattr(choice, "finish_reason", None)
+
+        parsed = self._parse_agent_response(raw_content, agent_spec, task, required_fields)
+
+        usage_metadata = {
+            "model": getattr(response, "model", model_name),
+            "finish_reason": finish_reason,
+            "prompt_tokens": getattr(usage, "prompt_tokens", None) if usage else None,
+            "completion_tokens": getattr(usage, "completion_tokens", None) if usage else None,
+            "total_tokens": getattr(usage, "total_tokens", None) if usage else 0,
+            "raw_response": raw_content,
         }
-        
-        # Add required fields based on output contract
+
+        return parsed, usage_metadata
+
+    def _build_messages(self, agent_spec: AgentSpec, task: Task, context: Dict[str, Any]) -> tuple[List[Dict[str, Any]], List[str]]:
+        """Build chat messages for the OpenAI request."""
+        output_contract = agent_spec.output_contract or {}
+        required_fields = output_contract.get("required_fields", [])
+        if not isinstance(required_fields, list):
+            required_fields = []
+
+        baseline_fields = ["result", "status", "execution_summary"]
+        for field in baseline_fields:
+            if field not in required_fields:
+                required_fields.append(field)
+
+        required_fields = list(dict.fromkeys(required_fields))
+
+        instructions = self._build_output_contract_instructions(output_contract, required_fields)
+        system_prompt = agent_spec.system_prompt.strip() if agent_spec.system_prompt else (
+            "You are a focused specialist agent within the Local Agent Studio."
+        )
+
+        system_messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": instructions},
+        ]
+
+        user_payload = {
+            "task": {
+                "id": task.id,
+                "name": task.name,
+                "description": task.description,
+                "inputs": task.inputs,
+                "expected_output": task.expected_output,
+                "success_criteria": task.success_criteria,
+            },
+            "available_tools": agent_spec.tools,
+            "limits": {
+                "max_steps": agent_spec.limits.max_steps,
+                "max_tokens": agent_spec.limits.max_tokens,
+                "timeout_seconds": agent_spec.limits.timeout_seconds,
+            },
+            "execution_context": self._extract_relevant_context(context, task),
+            "output_contract": output_contract,
+        }
+
+        user_message = {
+            "role": "user",
+            "content": json.dumps(user_payload, ensure_ascii=True, default=self._json_default),
+        }
+
+        return system_messages + [user_message], required_fields
+
+    def _build_output_contract_instructions(self, output_contract: Dict[str, Any], required_fields: List[str]) -> str:
+        """Create explicit formatting instructions for the LLM."""
+        expected_output = output_contract.get("expected_output")
+        success_criteria = output_contract.get("success_criteria") or []
+
+        instructions = [
+            "You must respond with a valid JSON object and nothing else.",
+            "The JSON must include the following required fields: " + ", ".join(required_fields) + ".",
+            "If the task completes successfully, set 'status' to 'completed'.",
+            "If information is missing, explain it in 'execution_summary' and set status to 'needs_follow_up'.",
+            "Return arrays or objects for structured data (lists of findings, citations, etc.).",
+        ]
+
+        if expected_output:
+            instructions.append(f"Target output description: {expected_output}.")
+        if success_criteria:
+            instructions.append("Success criteria: " + "; ".join(str(item) for item in success_criteria) + ".")
+
+        instructions.append("Do not include markdown or commentary outside the JSON response.")
+
+        return " ".join(instructions)
+
+    def _extract_relevant_context(self, context: Dict[str, Any], task: Task) -> Dict[str, Any]:
+        """Extract a compact, serialisable view of the execution context."""
+        if not isinstance(context, dict):
+            return {}
+
+        relevant: Dict[str, Any] = {}
+
+        user_request = context.get("user_request")
+        if user_request:
+            relevant["user_request"] = self._truncate_text(str(user_request), 500)
+
+        retrieved_chunks = context.get("retrieved_chunks")
+        if isinstance(retrieved_chunks, list) and retrieved_chunks:
+            trimmed_chunks = []
+            for chunk in retrieved_chunks[:5]:
+                if not isinstance(chunk, dict):
+                    continue
+                trimmed_chunks.append({
+                    "chunk_id": chunk.get("chunk_id") or chunk.get("id"),
+                    "content": self._truncate_text(chunk.get("content") or "", 600),
+                    "source": chunk.get("source") or chunk.get("source_file"),
+                    "score": chunk.get("score"),
+                })
+            if trimmed_chunks:
+                relevant["retrieved_chunks"] = trimmed_chunks
+
+        memory_hits = context.get("memory_hits")
+        if isinstance(memory_hits, list) and memory_hits:
+            trimmed_hits = []
+            for hit in memory_hits[:5]:
+                if not isinstance(hit, dict):
+                    continue
+                trimmed_hits.append({
+                    "memory_id": hit.get("memory_id") or hit.get("id"),
+                    "content": self._truncate_text(hit.get("content") or hit.get("value") or "", 400),
+                    "metadata": hit.get("metadata"),
+                })
+            if trimmed_hits:
+                relevant["memory_hits"] = trimmed_hits
+
+        notes = context.get("notes") or context.get("summary")
+        if notes:
+            relevant["notes"] = self._truncate_text(str(notes), 600)
+
+        if task.inputs:
+            relevant["task_inputs"] = task.inputs
+
+        uploads = context.get("uploaded_files") or context.get("uploads")
+        if uploads:
+            relevant["uploads"] = uploads
+
+        return relevant
+
+    def _select_model(self, agent_spec: AgentSpec, context: Dict[str, Any]) -> str:
+        """Select the model to use for this agent."""
+        output_contract = agent_spec.output_contract or {}
+        contract_model = output_contract.get("model")
+        if isinstance(contract_model, str) and contract_model.strip():
+            return contract_model.strip()
+
+        if isinstance(context, dict):
+            overrides = context.get("agent_model_overrides")
+            if isinstance(overrides, dict):
+                override = overrides.get(agent_spec.id) or overrides.get(agent_spec.created_for_task)
+                if isinstance(override, str) and override.strip():
+                    return override.strip()
+            generic_override = context.get("agent_model") or context.get("preferred_model")
+            if isinstance(generic_override, str) and generic_override.strip():
+                return generic_override.strip()
+
+        return self.default_model
+
+    def _determine_max_tokens(self, agent_spec: AgentSpec) -> int:
+        """Determine the maximum tokens allowed for the completion."""
+        max_tokens = agent_spec.limits.max_tokens if agent_spec.limits else None
+        if not max_tokens or max_tokens <= 0:
+            max_tokens = self.config.agent_generator.default_agent_max_tokens
+        max_tokens = max(max_tokens, 256)
+        return min(max_tokens, 4096)
+
+    def _parse_agent_response(
+        self,
+        raw_content: str,
+        agent_spec: AgentSpec,
+        task: Task,
+        required_fields: List[str],
+    ) -> Dict[str, Any]:
+        """Parse and validate the agent response from OpenAI."""
+        try:
+            parsed = json.loads(raw_content)
+        except json.JSONDecodeError:
+            self.logger.warning(
+                "Agent %s returned non-JSON payload; wrapping raw response.",
+                agent_spec.id,
+            )
+            parsed = {
+                "result": raw_content,
+                "status": "needs_review",
+                "execution_summary": "Model returned non-JSON payload.",
+            }
+
+        if not isinstance(parsed, dict):
+            parsed = {
+                "result": parsed,
+                "status": "completed",
+                "execution_summary": f"Completed task '{task.name}'",
+            }
+
         for field in required_fields:
-            if field == "result":
-                mock_result["result"] = f"Completed task: {task.description}"
-            elif field == "answer":
-                mock_result["answer"] = f"Answer to: {task.description}"
-            elif field == "citations":
-                mock_result["citations"] = ["source_1", "source_2"]
-            elif field == "confidence_score":
-                mock_result["confidence_score"] = 0.85
-            elif field == "extracted_content":
-                mock_result["extracted_content"] = "Sample extracted content"
-            elif field == "metadata":
-                mock_result["metadata"] = {"pages": 5, "format": "pdf"}
-            elif field == "processing_errors":
-                mock_result["processing_errors"] = []
-            elif field == "analysis_results":
-                mock_result["analysis_results"] = {"key_findings": ["finding_1", "finding_2"]}
-            elif field == "insights":
-                mock_result["insights"] = ["insight_1", "insight_2"]
-            elif field == "recommendations":
-                mock_result["recommendations"] = ["recommendation_1"]
-            elif field == "generated_content":
-                mock_result["generated_content"] = f"Generated content for: {task.name}"
-            elif field == "sources_used":
-                mock_result["sources_used"] = ["source_a", "source_b"]
-            elif field == "quality_metrics":
-                mock_result["quality_metrics"] = {"readability": 0.8, "accuracy": 0.9}
-            elif field == "task_breakdown":
-                mock_result["task_breakdown"] = ["subtask_1", "subtask_2"]
-            elif field == "dependencies":
-                mock_result["dependencies"] = task.dependencies
-            elif field == "resource_estimates":
-                mock_result["resource_estimates"] = {"time": "5 minutes", "complexity": "moderate"}
-            elif field == "quality_score":
-                mock_result["quality_score"] = 0.88
-            elif field == "evaluation_details":
-                mock_result["evaluation_details"] = {"criteria_met": 4, "criteria_total": 5}
-            elif field == "improvement_suggestions":
-                mock_result["improvement_suggestions"] = ["suggestion_1"]
-        
-        return mock_result
+            if field not in parsed or parsed[field] in (None, ""):
+                parsed[field] = self._default_field_value(field, task)
+
+        status = parsed.get("status")
+        if isinstance(status, str):
+            status = status.strip().lower()
+        else:
+            status = "completed"
+
+        if status not in {"completed", "failed", "needs_review", "needs_follow_up"}:
+            status = "completed"
+        parsed["status"] = status
+
+        if not parsed.get("execution_summary"):
+            parsed["execution_summary"] = f"Completed task '{task.name}'"
+
+        if not parsed.get("result"):
+            parsed["result"] = parsed["execution_summary"]
+
+        return parsed
+
+    def _default_field_value(self, field: str, task: Task) -> Any:
+        """Provide sensible defaults for required output fields."""
+        list_fields = {
+            "citations",
+            "insights",
+            "recommendations",
+            "key_findings",
+            "task_breakdown",
+            "dependencies",
+            "processing_errors",
+            "actions",
+        }
+        dict_fields = {
+            "metadata",
+            "analysis_results",
+            "evaluation_details",
+            "quality_metrics",
+            "resource_estimates",
+        }
+
+        if field in list_fields:
+            return []
+        if field in dict_fields:
+            return {}
+        if field in {"confidence_score", "quality_score"}:
+            return 0.0
+        if field == "result":
+            return f"Completed task: {task.description or task.name}"
+        if field == "execution_summary":
+            return f"Completed task '{task.name}'"
+        if field == "status":
+            return "completed"
+        return ""
+
+    def _estimate_steps(self, agent_output: Any) -> int:
+        """Estimate the number of steps performed by the agent."""
+        if isinstance(agent_output, dict):
+            for key in ("steps_taken", "step_count"):
+                value = agent_output.get(key)
+                if isinstance(value, int) and value > 0:
+                    return value
+            for key in ("reasoning_steps", "actions", "plan_steps"):
+                value = agent_output.get(key)
+                if isinstance(value, list) and value:
+                    return len(value)
+        return 1
+
+    def _truncate_text(self, text: str, limit: int = 800) -> str:
+        """Truncate text to avoid oversized prompts/logs."""
+        if not isinstance(text, str):
+            text = str(text)
+        return text[:limit] + ("..." if len(text) > limit else "")
+
+    def _json_default(self, obj: Any) -> str:
+        """Fallback serializer for JSON encoding."""
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return str(obj)
 
 
 class AgentLifecycleManager:
@@ -370,6 +656,15 @@ class AgentLifecycleManager:
     
     def _handle_agent_completion(self, agent_id: str, result: AgentExecutionResult):
         """Handle completion of an agent."""
+        existing_result = self.completed_agents.get(agent_id)
+        if existing_result and existing_result.status in {AgentExecutionStatus.CANCELLED, AgentExecutionStatus.TIMEOUT}:
+            self.logger.debug(
+                "Ignoring completion update for agent %s because status is already %s",
+                agent_id,
+                existing_result.status.value,
+            )
+            return
+
         # Move from running to completed
         if agent_id in self.running_agents:
             del self.running_agents[agent_id]

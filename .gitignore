@@ -27,3 +27,8 @@ server/data/**/*.bin
 server/data/memory/conversations/
 server/server/data/uploads/
 
+
+# Local secrets
+openai_api_key.txt
+.openai_api_key
+
