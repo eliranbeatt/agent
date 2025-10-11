@@ -160,7 +160,55 @@
       "metadata": {
         "test": true
       }
+    },
+    {
+      "role": "user",
+      "content": "Test message",
+      "timestamp": "2025-10-05T22:40:20.620969",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Test response",
+      "timestamp": "2025-10-05T22:40:20.621620",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "user",
+      "content": "Test message",
+      "timestamp": "2025-10-07T21:39:18.411575",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Test response",
+      "timestamp": "2025-10-07T21:39:18.422501",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "user",
+      "content": "Test message",
+      "timestamp": "2025-10-07T21:50:25.972229",
+      "metadata": {
+        "test": true
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "Test response",
+      "timestamp": "2025-10-07T21:50:25.979869",
+      "metadata": {
+        "test": true
+      }
     }
   ],
-  "updated_at": "2025-10-04T15:04:36.798344"
+  "updated_at": "2025-10-07T21:50:25.979903"
 }
